@@ -1,0 +1,23 @@
+# Copyright (C) 2026 The attn Authors.
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+name: Engine
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - run: GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./lib/attnsync
+      - run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build ./lib/attnsync

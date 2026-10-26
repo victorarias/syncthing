@@ -1,110 +1,93 @@
-[![Syncthing][14]][15]
+# attn's sync engine
 
----
+This repository is attn's embedded file synchronization engine. It started at
+Syncthing v2.1.6, commit `4461a1ce354d3990660966ad70176e00246adb61`.
+The `main` and `attn` branches contain the engine; attn pins `v0.1.0` with a plain
+`require github.com/victorarias/syncthing v0.1.0`.
 
-[![MPLv2 License](https://img.shields.io/badge/license-MPLv2-blue.svg?style=flat-square)](https://www.mozilla.org/MPL/2.0/)
-[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/88/badge)](https://bestpractices.coreinfrastructure.org/projects/88)
-[![Go Report Card](https://goreportcard.com/badge/github.com/syncthing/syncthing)](https://goreportcard.com/report/github.com/syncthing/syncthing)
+The embedder owns authentication and transport. The engine exchanges the file
+sync protocol over a `net.Conn` the embedder supplies. It opens no listener,
+dials no peers, and performs no TLS or certificate exchange.
 
-## Goals
+## Embed the engine
 
-Syncthing is a **continuous file synchronization program**. It synchronizes
-files between two or more computers. We strive to fulfill the goals below.
-The goals are listed in order of importance, the most important ones first.
-This is the summary version of the goal list - for more
-commentary, see the full [Goals document][13].
+Start with `attnsync.Configuration(localID)`. Add each authenticated peer to
+`cfg.Devices`, and add send-receive folders to `cfg.Folders`. Copy the device and
+folder defaults from `cfg.Defaults` when adding entries.
 
-Syncthing should be:
+```go
+engine, err := attnsync.New(indexDirectory, cfg, localID, logger)
+if err != nil {
+    return err
+}
+go func() { stopped <- engine.Serve(ctx) }()
+<-engine.Ready()
 
-1. **Safe From Data Loss**
+subscription := engine.Subscribe(events.AllEvents)
+defer subscription.Unsubscribe()
+// Drain subscription.C() for this engine's lifetime.
 
-   Protecting the user's data is paramount. We take every reasonable
-   precaution to avoid corrupting the user's files.
+// The bridge has already authenticated peerID.
+err = engine.ServeConn(bridgeContext, conn, peerID)
+```
 
-2. **Secure Against Attackers**
+`New` takes an absolute index directory and a configuration value. `Serve` owns
+the engine until cancellation and closes its database before returning. Run it
+once per engine. Each engine routes logs to its supplied `*slog.Logger`; nil
+means discard. Importing the module leaves the process's default logger and
+HTTP transport alone.
 
-   Again, protecting the user's data is paramount. Regardless of our other
-   goals, we must never allow the user's data to be susceptible to
-   eavesdropping or modification by unauthorized parties.
+Create the folder marker yourself, once when initializing a folder. The default
+marker is `.attn/notebook-sync`. The engine checks its presence and does not
+recreate it. Folder paths must be absolute, and markers must be custom relative
+paths under their folders.
 
-3. **Easy to Use**
+Set `FolderConfiguration.IgnorePatterns` in memory. The engine never reads or
+writes `.stignore`. Patterns support Syncthing's ignore syntax except `#include`,
+which is rejected before the configuration is applied. The defaults ignore
+`/.attn`, atomic-write temporary files, seed-transfer temporary files, and
+`.DS_Store`.
 
-   Syncthing should be approachable, understandable, and inclusive.
+`Configure` replaces the in-memory configuration and waits for it to apply.
+Use it to add or remove peers and folders, or change ignore patterns. The
+embedder stores configuration; the engine writes no config.xml.
 
-4. **Automatic**
+`FolderState` returns sync state, outstanding files and bytes, and the folder
+error. `Completion` reports a peer's progress. `Subscribe` exposes the engine's
+events, including state, index updates, file changes and disconnects.
+`IsConflict` identifies `*.sync-conflict-*` file names from those events. The
+embedder owns conflict counts and notifications.
 
-   User interaction should be required only when absolutely necessary.
+## Build and verify
 
-5. **Universally Available**
+```sh
+go test ./...
+GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./lib/attnsync
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build ./lib/attnsync
+```
 
-   Syncthing should run on every common computer. We are mindful that the
-   latest technology is not always available to every individual.
+Native cgo builds use SQLite through mattn/go-sqlite3. Builds without cgo use
+modernc.org/sqlite. Both keep SQLite temporary storage in memory. Index files
+stay in the supplied directory; pulled-file temporary files stay in the folder.
+No asset generation or build tag is required.
 
-6. **For Individuals**
+## Maintain the fork
 
-   Syncthing is primarily about empowering the individual user with safe,
-   secure, and easy to use file synchronization.
+attn maintains this engine independently. There is no upstream API or rebase
+compatibility promise. To take an upstream security fix, inspect its diff against
+the base commit above, port the affected engine code, and run the retained tests
+and the two-process sync probe before tagging the next version.
 
-7. **Everything Else**
+Removed code includes the applications and GUI, transport management, discovery,
+relays, NAT traversal, TLS utilities, upgrades, usage-reporting services, the
+legacy LevelDB database, packaging, and upstream system integration tests.
+`script/attn/trim.py` records the dependency-based trimming recipe. Protocol,
+model, scanner, filesystem, SQLite, configuration and ignore-matching tests stay
+with the engine.
 
-   There are many things we care about that don't make it on to the list. It
-   is fine to optimize for these values, as long as they are not in conflict
-   with the stated goals above.
+The patched glob matcher is kept in `internal/glob`, based on
+`github.com/calmh/glob` commit `1d823af5017b`. Keeping that patch here lets an
+embedder use a plain module requirement without copying upstream's `replace`
+directives. Its original MIT terms remain in `internal/glob/LICENSE`.
 
-## Getting Started
-
-Take a look at the [getting started guide][2].
-
-There are a few examples for keeping Syncthing running in the background
-on your system in [the etc directory][3]. There are also several [GUI
-implementations][11] for Windows, Mac, and Linux.
-
-## Docker
-
-To run Syncthing in Docker, see [the Docker README][16].
-
-## Getting in Touch
-
-The first and best point of contact is the [Forum][8].
-If you've found something that is clearly a
-bug, feel free to report it in the [GitHub issue tracker][10].
-
-If you believe that you’ve found a Syncthing-related security vulnerability,
-please report it by emailing security@syncthing.net. Do not report it in the
-Forum or issue tracker.
-
-## Building
-
-Building Syncthing from source is easy. After extracting the source bundle from
-a release or checking out git, you just need to run `go run build.go` and the
-binaries are created in `./bin`. There's [a guide][5] with more details on the
-build process.
-
-## Signed Releases
-
-Release binaries are GPG signed with the key available from
-https://syncthing.net/security/. There is also a built-in automatic
-upgrade mechanism (disabled in some distribution channels) which uses a
-compiled in ECDSA signature. macOS and Windows binaries are also
-code-signed.
-
-## Documentation
-
-Please see the Syncthing [documentation site][6] [[source]][17].
-
-All code is licensed under the [MPLv2 License][7].
-
-[1]: https://docs.syncthing.net/specs/bep-v1.html
-[2]: https://docs.syncthing.net/intro/getting-started.html
-[3]: https://github.com/syncthing/syncthing/blob/main/etc
-[5]: https://docs.syncthing.net/dev/building.html
-[6]: https://docs.syncthing.net/
-[7]: https://github.com/syncthing/syncthing/blob/main/LICENSE
-[8]: https://forum.syncthing.net/
-[10]: https://github.com/syncthing/syncthing/issues
-[11]: https://docs.syncthing.net/users/contrib.html#gui-wrappers
-[13]: https://github.com/syncthing/syncthing/blob/main/GOALS.md
-[14]: assets/logo-text-128.png
-[15]: https://syncthing.net/
-[16]: https://github.com/syncthing/syncthing/blob/main/README-Docker.md
-[17]: https://github.com/syncthing/docs
+Syncthing files and attn's changes retain MPL-2.0 headers. See [LICENSE](LICENSE).

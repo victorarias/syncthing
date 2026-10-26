@@ -37,7 +37,7 @@ for top in ('lib', 'internal'):
             continue
         shutil.rmtree(current)
         removed.append(current)
-for path in ('cmd', 'gui', 'assets', 'etc', 'man', 'meta', 'relnotes', 'test'):
+for path in ('internal/db/olddb', 'cmd', 'gui', 'assets', 'etc', 'man', 'meta', 'relnotes', 'test'):
     if Path(path).exists():
         shutil.rmtree(path)
 for pattern in ('Dockerfile*', 'build.*', 'README-Docker.md', 'compat.yaml', 'CONDUCT.md', 'CONTRIBUTING.md', 'GOALS.md', 'buf*.yaml'):

@@ -20,6 +20,7 @@ engine, err := attnsync.New(indexDirectory, cfg, localID, logger)
 if err != nil {
     return err
 }
+stopped := make(chan error, 1)
 go func() { stopped <- engine.Serve(ctx) }()
 <-engine.Ready()
 
@@ -33,7 +34,8 @@ err = engine.ServeConn(bridgeContext, conn, peerID)
 
 `New` takes an absolute index directory and a configuration value. `Serve` owns
 the engine until cancellation and closes its database before returning. Run it
-once per engine. Each engine routes logs to its supplied `*slog.Logger`; nil
+once per engine. `Ready` signals model initialization; first sync completion
+comes from index and folder-state events. Each engine routes logs to its supplied `*slog.Logger`; nil
 means discard. Importing the module leaves the process's default logger and
 HTTP transport alone.
 

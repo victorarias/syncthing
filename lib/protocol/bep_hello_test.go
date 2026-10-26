@@ -10,7 +10,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"io"
+	"net"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -37,9 +37,7 @@ func TestVersion14Hello(t *testing.T) {
 	outBuf.Write(hdrBuf)
 	outBuf.Write(msgBuf)
 
-	inBuf := new(bytes.Buffer)
-
-	conn := &readWriter{outBuf, inBuf}
+	conn := helloPeer(t, outBuf.Bytes())
 
 	send := Hello{
 		DeviceName:    "this device",
@@ -83,9 +81,7 @@ func TestOldHelloMsgs(t *testing.T) {
 		outBuf := new(bytes.Buffer)
 		outBuf.Write(msg)
 
-		inBuf := new(bytes.Buffer)
-
-		conn := &readWriter{outBuf, inBuf}
+		conn := helloPeer(t, outBuf.Bytes())
 
 		send := Hello{
 			DeviceName:    "this device",
@@ -101,15 +97,15 @@ func TestOldHelloMsgs(t *testing.T) {
 	}
 }
 
-type readWriter struct {
-	r io.Reader
-	w io.Writer
-}
-
-func (rw *readWriter) Write(data []byte) (int, error) {
-	return rw.w.Write(data)
-}
-
-func (rw *readWriter) Read(data []byte) (int, error) {
-	return rw.r.Read(data)
+func helloPeer(t *testing.T, message []byte) net.Conn {
+	local, remote := net.Pipe()
+	t.Cleanup(func() { local.Close(); remote.Close() })
+	go func() {
+		written := make(chan struct{})
+		go func() { remote.Write(message); close(written) }()
+		readHello(remote)
+		<-written
+		remote.Close()
+	}()
+	return local
 }

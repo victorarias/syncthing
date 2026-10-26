@@ -12,14 +12,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/db/sqlite"
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/ignore"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/protocol/mocks"
-	"github.com/syncthing/syncthing/lib/rand"
+	"github.com/victorarias/syncthing/internal/db/sqlite"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/ignore"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/protocol/mocks"
+	"github.com/victorarias/syncthing/lib/rand"
 )
 
 var (

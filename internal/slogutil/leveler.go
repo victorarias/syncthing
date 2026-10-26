@@ -51,7 +51,7 @@ func SetLevelOverrides(sttrace string) {
 		if cutPkg, levelStr, ok := strings.Cut(pkg, ":"); ok {
 			pkg = cutPkg
 			if err := level.UnmarshalText([]byte(levelStr)); err != nil {
-				slog.Warn("Bad log level requested in STTRACE", slog.String("pkg", pkg), slog.String("level", levelStr), Error(err))
+				Logger().Warn("Bad log level requested in STTRACE", slog.String("pkg", pkg), slog.String("level", levelStr), Error(err))
 			}
 		}
 		globalLevels.Set(pkg, level)
@@ -80,7 +80,7 @@ func (t *levelTracker) Set(pkg string, level slog.Level) {
 	t.levels[pkg] = level
 	t.mut.Unlock()
 	if changed {
-		slog.Info("Changed package log level", "package", pkg, "level", level)
+		Logger().Info("Changed package log level", "package", pkg, "level", level)
 	}
 }
 
@@ -90,7 +90,7 @@ func (t *levelTracker) SetDefault(level slog.Level) {
 	t.defLevel = level
 	t.mut.Unlock()
 	if changed {
-		slog.Info("Changed default log level", "level", level)
+		Logger().Info("Changed default log level", "level", level)
 	}
 }
 

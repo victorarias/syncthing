@@ -5,7 +5,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/syncthing/syncthing/lib/model"
+	"github.com/victorarias/syncthing/lib/model"
 )
 
 type FolderSummaryService struct {

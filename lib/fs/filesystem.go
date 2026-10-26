@@ -18,8 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/syncthing/syncthing/lib/ignore/ignoreresult"
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/ignore/ignoreresult"
+	"github.com/victorarias/syncthing/lib/protocol"
 )
 
 type XattrFilter interface {
@@ -269,13 +270,13 @@ func NewFilesystem(fsType FilesystemType, uri string, opts ...Option) Filesystem
 		layersAboveWalkFilesystem++
 	}
 	switch {
-	case l.ShouldDebug("walkfs"):
+	case slogutil.Adapter(slogutil.Logger()).ShouldDebug("walkfs"):
 		// A walkFilesystem is not a layer to skip, it embeds the underlying
 		// filesystem, passing calls directly trough. Except for calls made
 		// during walking, however those are truly originating in the walk
 		// filesystem.
 		fs = NewWalkFilesystem(newLogFilesystem(fs, layersAboveWalkFilesystem))
-	case l.ShouldDebug("fs"):
+	case slogutil.Adapter(slogutil.Logger()).ShouldDebug("fs"):
 		fs = newLogFilesystem(NewWalkFilesystem(fs), layersAboveWalkFilesystem)
 	default:
 		fs = NewWalkFilesystem(fs)

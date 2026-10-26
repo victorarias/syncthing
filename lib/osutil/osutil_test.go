@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/osutil"
-	"github.com/syncthing/syncthing/lib/rand"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/osutil"
+	"github.com/victorarias/syncthing/lib/rand"
 )
 
 func TestIsDeleted(t *testing.T) {

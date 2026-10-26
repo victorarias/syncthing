@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/db"
-	"github.com/syncthing/syncthing/internal/db/sqlite"
+	"github.com/victorarias/syncthing/internal/db"
+	"github.com/victorarias/syncthing/internal/db/sqlite"
 )
 
 func TestDeviceStat(t *testing.T) {

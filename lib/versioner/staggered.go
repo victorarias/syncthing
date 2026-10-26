@@ -13,8 +13,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/fs"
 )
 
 func init() {
@@ -55,7 +56,7 @@ func newStaggered(cfg config.FolderConfiguration) Versioner {
 		copyRangeMethod: cfg.CopyRangeMethod.ToFS(),
 	}
 
-	l.Debugf("instantiated %#v", s)
+	slogutil.Adapter(cfg.Logger()).Debugf("instantiated %#v", s)
 	return s
 }
 
@@ -74,14 +75,14 @@ func (v *staggered) toRemove(versions []string, now time.Time) []string {
 	for _, version := range versions {
 		versionTime, err := time.ParseInLocation(TimeFormat, extractTag(version), time.Local)
 		if err != nil {
-			l.Debugf("Versioner: file name %q is invalid: %v", version, err)
+			slogutil.Adapter(fs.Logger(v.folderFs)).Debugf("Versioner: file name %q is invalid: %v", version, err)
 			continue
 		}
 		age := int64(now.Sub(versionTime).Seconds())
 
 		// If the file is older than the max age of the last interval, remove it
 		if lastIntv := v.interval[len(v.interval)-1]; lastIntv.end > 0 && age > lastIntv.end {
-			l.Debugln("Versioner: File over maximum age -> delete ", version)
+			slogutil.Adapter(fs.Logger(v.folderFs)).Debugln("Versioner: File over maximum age -> delete ", version)
 			remove = append(remove, version)
 			continue
 		}
@@ -102,7 +103,7 @@ func (v *staggered) toRemove(versions []string, now time.Time) []string {
 		}
 
 		if prevAge-age < usedInterval.step {
-			l.Debugln("too many files in step -> delete", version)
+			slogutil.Adapter(fs.Logger(v.folderFs)).Debugln("too many files in step -> delete", version)
 			remove = append(remove, version)
 			continue
 		}

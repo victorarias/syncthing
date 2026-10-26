@@ -9,13 +9,14 @@ package model
 import (
 	"context"
 
-	"github.com/syncthing/syncthing/internal/itererr"
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/ignore"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/semaphore"
-	"github.com/syncthing/syncthing/lib/versioner"
+	"github.com/victorarias/syncthing/internal/itererr"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/ignore"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/semaphore"
+	"github.com/victorarias/syncthing/lib/versioner"
 )
 
 func init() {
@@ -56,7 +57,7 @@ func (f *sendOnlyFolder) pull(ctx context.Context) (bool, error) {
 		if f.ignores.Match(file.FileName()).IsIgnored() {
 			file.SetIgnored()
 			batch.Append(file)
-			l.Debugln(f, "Handling ignored file", file)
+			slogutil.Adapter(f.sl).Debugln(f, "Handling ignored file", file)
 			continue
 		}
 
@@ -82,7 +83,7 @@ func (f *sendOnlyFolder) pull(ctx context.Context) (bool, error) {
 		}
 
 		batch.Append(file)
-		l.Debugln(f, "Merging versions of identical file", file)
+		slogutil.Adapter(f.sl).Debugln(f, "Merging versions of identical file", file)
 	}
 
 	batch.Flush()

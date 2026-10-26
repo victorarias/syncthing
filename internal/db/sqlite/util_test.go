@@ -9,7 +9,7 @@ package sqlite
 import (
 	"testing"
 
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/protocol"
 )
 
 func TestDbvector(t *testing.T) {

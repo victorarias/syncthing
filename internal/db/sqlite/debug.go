@@ -6,6 +6,6 @@
 
 package sqlite
 
-import "github.com/syncthing/syncthing/internal/slogutil"
+import "github.com/victorarias/syncthing/internal/slogutil"
 
 func init() { slogutil.RegisterPackage("SQLite database") }

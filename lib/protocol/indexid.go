@@ -11,7 +11,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/syncthing/syncthing/lib/rand"
+	"github.com/victorarias/syncthing/lib/rand"
 )
 
 type IndexID uint64

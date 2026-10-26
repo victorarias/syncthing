@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/syncthing/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/build"
 )
 
 const pathSeparatorString = string(PathSeparator)

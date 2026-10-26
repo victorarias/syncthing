@@ -7,7 +7,7 @@
 package dbproto
 
 import (
-	bep "github.com/syncthing/syncthing/internal/gen/bep"
+	bep "github.com/victorarias/syncthing/internal/gen/bep"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"

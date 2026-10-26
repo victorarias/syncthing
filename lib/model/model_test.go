@@ -26,20 +26,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/db"
-	"github.com/syncthing/syncthing/internal/itererr"
-	"github.com/syncthing/syncthing/lib/build"
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/ignore"
-	"github.com/syncthing/syncthing/lib/osutil"
-	"github.com/syncthing/syncthing/lib/protocol"
-	protocolmocks "github.com/syncthing/syncthing/lib/protocol/mocks"
-	srand "github.com/syncthing/syncthing/lib/rand"
-	"github.com/syncthing/syncthing/lib/semaphore"
-	"github.com/syncthing/syncthing/lib/testutil"
-	"github.com/syncthing/syncthing/lib/versioner"
+	"github.com/victorarias/syncthing/internal/db"
+	"github.com/victorarias/syncthing/internal/itererr"
+	"github.com/victorarias/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/osutil"
+	"github.com/victorarias/syncthing/lib/protocol"
+	protocolmocks "github.com/victorarias/syncthing/lib/protocol/mocks"
+	srand "github.com/victorarias/syncthing/lib/rand"
+	"github.com/victorarias/syncthing/lib/semaphore"
+	"github.com/victorarias/syncthing/lib/testutil"
+	"github.com/victorarias/syncthing/lib/versioner"
 )
 
 func newState(t testing.TB, cfg config.Configuration) (*testModel, context.CancelFunc) {
@@ -1045,8 +1044,8 @@ func TestIssue4897(t *testing.T) {
 // TestIssue5063 is about a panic in connection with modifying config in quick
 // succession, related with auto accepted folders. It's unclear what exactly, a
 // relevant bit seems to be here:
-// PR-comments: https://github.com/syncthing/syncthing/pull/5069/files#r203146546
-// Issue: https://github.com/syncthing/syncthing/pull/5509
+// PR-comments: https://github.com/victorarias/syncthing/pull/5069/files#r203146546
+// Issue: https://github.com/victorarias/syncthing/pull/5509
 func TestIssue5063(t *testing.T) {
 	m, cancel := newState(t, defaultAutoAcceptCfg)
 	defer cleanupModel(m)
@@ -1569,159 +1568,33 @@ func TestAutoAcceptEnc(t *testing.T) {
 	}
 }
 
-func changeIgnores(t *testing.T, m *testModel, expected []string) {
-	arrEqual := func(a, b []string) bool {
-		if len(a) != len(b) {
-			return false
-		}
-
-		for i := range a {
-			if a[i] != b[i] {
-				return false
-			}
-		}
-		return true
-	}
-
-	ignores, _, err := m.LoadIgnores("default")
-	if err != nil {
-		t.Error(err)
-	}
-
-	if !arrEqual(ignores, expected) {
-		t.Errorf("Incorrect ignores: %v != %v", ignores, expected)
-	}
-
-	ignores = append(ignores, "pox")
-
-	err = m.SetIgnores("default", ignores)
-	if err != nil {
-		t.Error(err)
-	}
-
-	ignores2, _, err := m.LoadIgnores("default")
-	if err != nil {
-		t.Error(err)
-	}
-
-	if !arrEqual(ignores, ignores2) {
-		t.Errorf("Incorrect ignores: %v != %v", ignores2, ignores)
-	}
-
-	if build.IsDarwin {
-		// see above
-		time.Sleep(time.Second)
-	} else {
-		time.Sleep(time.Millisecond)
-	}
-	err = m.SetIgnores("default", expected)
-	if err != nil {
-		t.Error(err)
-	}
-
-	ignores, _, err = m.LoadIgnores("default")
-	if err != nil {
-		t.Error(err)
-	}
-
-	if !arrEqual(ignores, expected) {
-		t.Errorf("Incorrect ignores: %v != %v", ignores, expected)
-	}
-}
-
 func TestIgnores(t *testing.T) {
 	w, cancel := newConfigWrapper(defaultCfg)
 	defer cancel()
-	ffs := w.FolderList()[0].Filesystem()
 	m := setupModel(t, w)
 	defer cleanupModel(m)
-
-	// Assure a clean start state
-	must(t, ffs.MkdirAll(config.DefaultMarkerName, 0o644))
-	writeFile(t, ffs, ".stignore", []byte(".*\nquux\n"))
-
-	folderIgnoresAlwaysReload(t, m, defaultFolderConfig)
-
-	// Make sure the initial scan has finished (ScanFolders is blocking)
-	m.ScanFolders()
-
-	expected := []string{
-		".*",
-		"quux",
+	for _, paused := range []bool{false, true} {
+		cfg := w.RawCopy()
+		cfg.Folders[0].Paused = paused
+		replace(t, w, cfg)
+		for _, patterns := range [][]string{{".*", "quux"}, {"pox"}, {}} {
+			must(t, m.SetIgnores("default", patterns))
+			lines, _, err := m.LoadIgnores("default")
+			must(t, err)
+			if !slices.Equal(lines, patterns) {
+				t.Fatalf("ignores: %v != %v", lines, patterns)
+			}
+			stored, _ := w.Folder("default")
+			if !slices.Equal(stored.IgnorePatterns, patterns) {
+				t.Fatalf("config ignores: %v != %v", stored.IgnorePatterns, patterns)
+			}
+		}
 	}
-
-	changeIgnores(t, m, expected)
-
-	_, _, err := m.LoadIgnores("doesnotexist")
-	if err == nil {
-		t.Error("No error")
+	if _, _, err := m.LoadIgnores("missing"); err == nil {
+		t.Fatal("missing folder accepted")
 	}
-
-	err = m.SetIgnores("doesnotexist", expected)
-	if err == nil {
-		t.Error("No error")
-	}
-
-	// Invalid path, treated like no patterns at all.
-	fcfg := config.FolderConfiguration{
-		ID: "fresh", Path: "XXX",
-		FilesystemType: config.FilesystemTypeFake,
-	}
-	ignores := ignore.New(fcfg.Filesystem())
-	m.mut.Lock()
-	m.folderCfgs[fcfg.ID] = fcfg
-	m.folderIgnores[fcfg.ID] = ignores
-	m.mut.Unlock()
-
-	_, _, err = m.LoadIgnores("fresh")
-	if err != nil {
-		t.Error("Got error for inexistent folder path")
-	}
-
-	// Repeat tests with paused folder
-	pausedDefaultFolderConfig := defaultFolderConfig
-	pausedDefaultFolderConfig.Paused = true
-
-	m.restartFolder(defaultFolderConfig, pausedDefaultFolderConfig)
-	// Here folder initialization is not an issue as a paused folder isn't
-	// added to the model and thus there is no initial scan happening.
-
-	changeIgnores(t, m, expected)
-
-	// Make sure no .stignore file is considered valid
-	defer func() {
-		must(t, ffs.Rename(".stignore.bak", ".stignore"))
-	}()
-	must(t, ffs.Rename(".stignore", ".stignore.bak"))
-	changeIgnores(t, m, []string{})
-}
-
-func TestEmptyIgnores(t *testing.T) {
-	w, cancel := newConfigWrapper(defaultCfg)
-	defer cancel()
-	ffs := w.FolderList()[0].Filesystem()
-	m := setupModel(t, w)
-	defer cleanupModel(m)
-
-	if err := m.SetIgnores("default", []string{}); err != nil {
-		t.Error(err)
-	}
-	if _, err := ffs.Stat(".stignore"); err == nil {
-		t.Error(".stignore was created despite being empty")
-	}
-
-	if err := m.SetIgnores("default", []string{".*", "quux"}); err != nil {
-		t.Error(err)
-	}
-	if _, err := ffs.Stat(".stignore"); os.IsNotExist(err) {
-		t.Error(".stignore does not exist")
-	}
-
-	if err := m.SetIgnores("default", []string{}); err != nil {
-		t.Error(err)
-	}
-	if _, err := ffs.Stat(".stignore"); err == nil {
-		t.Error(".stignore should have been deleted because it is empty")
+	if err := m.SetIgnores("missing", nil); err == nil {
+		t.Fatal("missing folder accepted")
 	}
 }
 
@@ -2895,8 +2768,9 @@ func TestIssue4094(t *testing.T) {
 		t.Fatalf("failed setting ignores: %v", err)
 	}
 
-	if _, err := fcfg.Filesystem().Lstat(".stignore"); err != nil {
-		t.Fatalf("failed stating .stignore: %v", err)
+	lines, _, err := m.LoadIgnores(fcfg.ID)
+	if err != nil || !slices.Equal(lines, []string{"foo"}) {
+		t.Fatalf("paused folder ignores: %v, %v", lines, err)
 	}
 }
 
@@ -3795,7 +3669,7 @@ func testConfigChangeTriggersClusterConfigs(t *testing.T, expectFirst, expectSec
 // The end result of the tested scenario is that the global version entry has an
 // empty version vector and is not deleted, while everything is actually deleted.
 // That then causes these files to be considered as needed, while they are not.
-// https://github.com/syncthing/syncthing/issues/6961
+// https://github.com/victorarias/syncthing/issues/6961
 func TestIssue6961(t *testing.T) {
 	wcfg, fcfg := newDefaultCfgWrapper(t)
 	tfs := fcfg.Filesystem()

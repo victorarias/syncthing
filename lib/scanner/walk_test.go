@@ -23,12 +23,12 @@ import (
 	"github.com/d4l3k/messagediff"
 	"golang.org/x/text/unicode/norm"
 
-	"github.com/syncthing/syncthing/lib/build"
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/ignore"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/rand"
+	"github.com/victorarias/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/ignore"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/rand"
 )
 
 type testfile struct {
@@ -826,7 +826,7 @@ func TestIssue4841(t *testing.T) {
 	}
 }
 
-// TestNotExistingError reproduces https://github.com/syncthing/syncthing/issues/5385
+// TestNotExistingError reproduces https://github.com/victorarias/syncthing/issues/5385
 func TestNotExistingError(t *testing.T) {
 	sub := "notExisting"
 	testFs := newTestFs()
@@ -882,7 +882,7 @@ func TestSkipIgnoredDirs(t *testing.T) {
 	}
 }
 
-// https://github.com/syncthing/syncthing/issues/6487
+// https://github.com/victorarias/syncthing/issues/6487
 func TestIncludedSubdir(t *testing.T) {
 	fss := fs.NewFilesystem(fs.FilesystemTypeFake, "")
 

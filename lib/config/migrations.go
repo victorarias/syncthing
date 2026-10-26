@@ -8,19 +8,16 @@ package config
 
 import (
 	"cmp"
-	"log/slog"
 	"net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 
-	"github.com/syncthing/syncthing/internal/slogutil"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/netutil"
-	"github.com/syncthing/syncthing/lib/upgrade"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/netutil"
 )
 
 // migrations is the set of config migration functions, with their target
@@ -239,7 +236,7 @@ func migrateToConfigV23(cfg *Configuration) {
 				ffs.Hide(DefaultMarkerName) // ignore error
 			}
 			if err != nil {
-				slog.Warn("Failed to upgrade folder marker", slogutil.Error(err))
+				cfg.Logger().Warn("Failed to upgrade folder marker", slogutil.Error(err))
 			}
 		}
 	}
@@ -298,12 +295,6 @@ func migrateToConfigV18(cfg *Configuration) {
 		cfg.Options.UpgradeToPreReleases = true
 	}
 
-	// Show a notification to explain what's going on, except if upgrades
-	// are disabled by compilation or environment variable in which case
-	// it's not relevant.
-	if !upgrade.DisabledByCompilation && os.Getenv("STNOUPGRADE") == "" {
-		cfg.Options.UnackedNotificationIDs = append(cfg.Options.UnackedNotificationIDs, "channelNotification")
-	}
 }
 
 func migrateToConfigV15(cfg *Configuration) {

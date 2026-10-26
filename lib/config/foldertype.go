@@ -6,7 +6,7 @@
 
 package config
 
-import "github.com/syncthing/syncthing/lib/protocol"
+import "github.com/victorarias/syncthing/lib/protocol"
 
 type FolderType protocol.FolderType
 

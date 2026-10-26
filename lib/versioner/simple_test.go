@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syncthing/syncthing/lib/build"
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/fs"
 )
 
 func TestTaggedFilename(t *testing.T) {

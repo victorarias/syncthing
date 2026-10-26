@@ -7,13 +7,12 @@
 package versioner
 
 import (
-	"log/slog"
 	"path/filepath"
 	"slices"
 	"strings"
 
-	"github.com/syncthing/syncthing/internal/slogutil"
-	"github.com/syncthing/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/fs"
 )
 
 type emptyDirTracker map[string]struct{}
@@ -46,12 +45,12 @@ func (t emptyDirTracker) emptyDirs() []string {
 	return empty
 }
 
-func (t emptyDirTracker) deleteEmptyDirs(fs fs.Filesystem) {
+func (t emptyDirTracker) deleteEmptyDirs(filesystem fs.Filesystem) {
 	for _, path := range t.emptyDirs() {
-		l.Debugln("Cleaner: deleting empty directory", path)
-		err := fs.Remove(path)
+		slogutil.Adapter(fs.Logger(filesystem)).Debugln("Cleaner: deleting empty directory", path)
+		err := filesystem.Remove(path)
 		if err != nil {
-			slog.Warn("Failed to remove versioned directory", slogutil.FilePath(path), slogutil.Error(err))
+			fs.Logger(filesystem).Warn("Failed to remove versioned directory", slogutil.FilePath(path), slogutil.Error(err))
 		}
 	}
 }

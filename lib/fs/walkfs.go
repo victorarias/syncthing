@@ -13,6 +13,8 @@ package fs
 import (
 	"errors"
 	"path/filepath"
+
+	"github.com/victorarias/syncthing/internal/slogutil"
 )
 
 var ErrInfiniteRecursion = errors.New("infinite filesystem recursion detected")
@@ -23,20 +25,20 @@ type ancestorDirList struct {
 }
 
 func (ancestors *ancestorDirList) Push(info FileInfo) {
-	l.Debugf("ancestorDirList: Push '%s'", info.Name())
+	slogutil.Adapter(slogutil.Logger()).Debugf("ancestorDirList: Push '%s'", info.Name())
 	ancestors.list = append(ancestors.list, info)
 }
 
 func (ancestors *ancestorDirList) Pop() FileInfo {
 	aLen := len(ancestors.list)
 	info := ancestors.list[aLen-1]
-	l.Debugf("ancestorDirList: Pop '%s'", info.Name())
+	slogutil.Adapter(slogutil.Logger()).Debugf("ancestorDirList: Pop '%s'", info.Name())
 	ancestors.list = ancestors.list[:aLen-1]
 	return info
 }
 
 func (ancestors *ancestorDirList) Contains(info FileInfo) bool {
-	l.Debugf("ancestorDirList: Contains '%s'", info.Name())
+	slogutil.Adapter(slogutil.Logger()).Debugf("ancestorDirList: Contains '%s'", info.Name())
 	for _, ancestor := range ancestors.list {
 		if ancestors.fs.SameFile(info, ancestor) {
 			return true
@@ -82,7 +84,7 @@ func NewWalkFilesystem(next Filesystem) Filesystem {
 
 // walk recursively descends path, calling walkFn.
 func (f *walkFilesystem) walk(path string, info FileInfo, walkFn WalkFunc, ancestors *ancestorDirList) error {
-	l.Debugf("walk: path=%s", path)
+	slogutil.Adapter(Logger(f)).Debugf("walk: path=%s", path)
 	path, err := Canonicalize(path)
 	if err != nil {
 		return err

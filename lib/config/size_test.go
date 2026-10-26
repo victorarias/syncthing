@@ -9,8 +9,8 @@ package config
 import (
 	"testing"
 
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/structutil"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/structutil"
 )
 
 type TestStruct struct {

@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/syncthing/syncthing/lib/build"
-	"github.com/syncthing/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/fs"
 )
 
 func TestExternalNoCommand(t *testing.T) {

@@ -10,8 +10,8 @@ import (
 	"iter"
 	"time"
 
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/protocol"
 	"github.com/thejerf/suture/v4"
 )
 

@@ -14,10 +14,10 @@ import (
 	"slices"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/syncthing/syncthing/internal/gen/bep"
-	"github.com/syncthing/syncthing/internal/gen/dbproto"
-	"github.com/syncthing/syncthing/lib/osutil"
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/internal/gen/bep"
+	"github.com/victorarias/syncthing/internal/gen/dbproto"
+	"github.com/victorarias/syncthing/lib/osutil"
+	"github.com/victorarias/syncthing/lib/protocol"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -20,11 +20,11 @@ import (
 
 	"github.com/thejerf/suture/v4"
 
-	"github.com/syncthing/syncthing/internal/slogutil"
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/osutil"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/sliceutil"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/osutil"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/sliceutil"
 )
 
 const (
@@ -127,11 +127,13 @@ type Wrapper interface {
 }
 
 type wrapper struct {
+	sl       *slog.Logger
 	cfg      Configuration
 	path     string
 	evLogger events.Logger
 	myID     protocol.DeviceID
 	queue    chan modifyEntry
+	done     chan struct{}
 
 	waiter Waiter // Latest ongoing config change
 	subs   []Committer
@@ -144,13 +146,15 @@ type wrapper struct {
 // disk.
 // The returned Wrapper is a suture.Service, thus needs to be started (added to
 // a supervisor).
-func Wrap(path string, cfg Configuration, myID protocol.DeviceID, evLogger events.Logger) Wrapper {
+func Wrap(path string, cfg Configuration, myID protocol.DeviceID, evLogger events.Logger, loggers ...*slog.Logger) Wrapper {
 	w := &wrapper{
+		sl:       slogutil.Logger(loggers...),
 		cfg:      cfg,
 		path:     path,
 		evLogger: evLogger,
 		myID:     myID,
 		queue:    make(chan modifyEntry, maxModifications),
+		done:     make(chan struct{}),
 		waiter:   noopWaiter{}, // Noop until first config change
 	}
 	return w
@@ -225,18 +229,25 @@ func (w *wrapper) Modify(fn ModifyFunction) (Waiter, error) {
 func (w *wrapper) modifyQueued(modifyFunc ModifyFunction) (Waiter, error) {
 	e := modifyEntry{
 		modifyFunc: modifyFunc,
-		res:        make(chan modifyResult),
+		res:        make(chan modifyResult, 1),
 	}
 	select {
+	case <-w.done:
+		return noopWaiter{}, errors.New("configuration service stopped")
 	case w.queue <- e:
 	default:
 		return noopWaiter{}, errTooManyModifications
 	}
-	res := <-e.res
-	return res.w, res.err
+	select {
+	case res := <-e.res:
+		return res.w, res.err
+	case <-w.done:
+		return noopWaiter{}, errors.New("configuration service stopped")
+	}
 }
 
 func (w *wrapper) Serve(ctx context.Context) error {
+	defer close(w.done)
 	defer w.serveSave()
 
 	var e modifyEntry
@@ -297,7 +308,7 @@ func (w *wrapper) serveSave() {
 		return
 	}
 	if err := w.Save(); err != nil {
-		slog.Error("Failed to save config", slogutil.Error(err))
+		slogutil.Logger(w.sl).Error("Failed to save config", slogutil.Error(err))
 	}
 }
 
@@ -313,9 +324,9 @@ func (w *wrapper) replaceLocked(to Configuration) (Waiter, error) {
 		if !ok {
 			continue
 		}
-		l.Debugln(sub, "verifying configuration")
+		slogutil.Adapter(w.sl).Debugln(sub, "verifying configuration")
 		if err := sub.VerifyConfiguration(from.Copy(), to.Copy()); err != nil {
-			l.Debugln(sub, "rejected config:", err)
+			slogutil.Adapter(w.sl).Debugln(sub, "rejected config:", err)
 			return noopWaiter{}, err
 		}
 	}
@@ -338,9 +349,9 @@ func (w *wrapper) notifyListeners(from, to Configuration) Waiter {
 }
 
 func (w *wrapper) notifyListener(sub Committer, from, to Configuration) {
-	l.Debugln(sub, "committing configuration")
+	slogutil.Adapter(w.sl).Debugln(sub, "committing configuration")
 	if !sub.CommitConfiguration(from, to) {
-		l.Debugln(sub, "requires restart")
+		slogutil.Adapter(w.sl).Debugln(sub, "requires restart")
 		w.requiresRestart.Store(true)
 	}
 }
@@ -502,23 +513,26 @@ func (w *wrapper) Folder(id string) (FolderConfiguration, bool) {
 
 // Save writes the configuration to disk, and generates a ConfigSaved event.
 func (w *wrapper) Save() error {
+	if w.path == "" {
+		return nil
+	}
 	w.mut.Lock()
 	defer w.mut.Unlock()
 
 	fd, err := osutil.CreateAtomic(w.path)
 	if err != nil {
-		l.Debugln("CreateAtomic:", err)
+		slogutil.Adapter(w.sl).Debugln("CreateAtomic:", err)
 		return err
 	}
 
 	if err := w.cfg.WriteXML(osutil.LineEndingsWriter(fd)); err != nil {
-		l.Debugln("WriteXML:", err)
+		slogutil.Adapter(w.sl).Debugln("WriteXML:", err)
 		fd.Close()
 		return err
 	}
 
 	if err := fd.Close(); err != nil {
-		l.Debugln("Close:", err)
+		slogutil.Adapter(w.sl).Debugln("Close:", err)
 		return err
 	}
 

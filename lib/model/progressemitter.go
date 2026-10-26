@@ -13,12 +13,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/protocol"
 )
 
 type ProgressEmitter struct {
+	sl                 *slog.Logger
 	cfg                config.Wrapper
 	registry           map[string]map[string]*sharedPullerState // folder: name: puller
 	interval           time.Duration
@@ -45,8 +47,9 @@ func (p progressUpdate) send(ctx context.Context) {
 
 // NewProgressEmitter creates a new progress emitter which emits
 // DownloadProgress events every interval.
-func NewProgressEmitter(cfg config.Wrapper, evLogger events.Logger) *ProgressEmitter {
+func NewProgressEmitter(cfg config.Wrapper, evLogger events.Logger, loggers ...*slog.Logger) *ProgressEmitter {
 	t := &ProgressEmitter{
+		sl:                 slogutil.Logger(loggers...),
 		cfg:                cfg,
 		registry:           make(map[string]map[string]*sharedPullerState),
 		timer:              time.NewTimer(time.Millisecond),
@@ -72,7 +75,7 @@ func (t *ProgressEmitter) Serve(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Debug("Progress emitter: stopping")
+			slogutil.Logger(t.sl).Debug("Progress emitter: stopping")
 			return nil
 		case <-t.timer.C:
 			t.mut.Lock()
@@ -126,7 +129,7 @@ func (t *ProgressEmitter) sendDownloadProgressEventLocked() {
 		}
 	}
 	t.evLogger.Log(events.DownloadProgress, output)
-	l.Debugf("progress emitter: emitting %#v", output)
+	slogutil.Adapter(t.sl).Debugf("progress emitter: emitting %#v", output)
 }
 
 func (t *ProgressEmitter) computeProgressUpdates() []progressUpdate {
@@ -218,16 +221,16 @@ func (t *ProgressEmitter) CommitConfiguration(_, to config.Configuration) bool {
 	if newInterval > 0 {
 		if t.disabled {
 			t.disabled = false
-			slog.Debug("Progress emitter: enabled")
+			slogutil.Logger(t.sl).Debug("Progress emitter: enabled")
 		}
 		if t.interval != newInterval {
 			t.interval = newInterval
-			l.Debugln("Progress emitter: updated interval", t.interval)
+			slogutil.Adapter(t.sl).Debugln("Progress emitter: updated interval", t.interval)
 		}
 	} else if !t.disabled {
 		t.clearLocked()
 		t.disabled = true
-		slog.Debug("Progress emitter: disabled")
+		slogutil.Logger(t.sl).Debug("Progress emitter: disabled")
 	}
 	t.minBlocks = to.Options.TempIndexMinBlocks
 	if t.interval < time.Second {
@@ -246,7 +249,7 @@ func (t *ProgressEmitter) Register(s *sharedPullerState) {
 	if t.disabled {
 		return
 	}
-	l.Debugln("progress emitter: registering", s.folder, s.file.Name)
+	slogutil.Adapter(t.sl).Debugln("progress emitter: registering", s.folder, s.file.Name)
 	if t.emptyLocked() {
 		t.timer.Reset(t.interval)
 	}
@@ -265,7 +268,7 @@ func (t *ProgressEmitter) Deregister(s *sharedPullerState) {
 		return
 	}
 
-	l.Debugln("progress emitter: deregistering", s.folder, s.file.Name)
+	slogutil.Adapter(t.sl).Debugln("progress emitter: deregistering", s.folder, s.file.Name)
 	delete(t.registry[s.folder], s.file.Name)
 }
 
@@ -277,7 +280,7 @@ func (t *ProgressEmitter) BytesCompleted(folder string) (bytes int64) {
 	for _, s := range t.registry[folder] {
 		bytes += s.Progress().BytesDone
 	}
-	l.Debugf("progress emitter: bytes completed for %s: %d", folder, bytes)
+	slogutil.Adapter(t.sl).Debugf("progress emitter: bytes completed for %s: %d", folder, bytes)
 	return
 }
 

@@ -9,14 +9,13 @@ package sqlite
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
 
-	"github.com/syncthing/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/internal/slogutil"
 )
 
 func (s *DB) DropFolder(folder string) error {
@@ -69,9 +68,9 @@ func (s *DB) cleanDroppedFolders() error {
 		inDB := slices.ContainsFunc(names, func(name string) bool { return strings.HasPrefix(base, name) })
 		if !inDB {
 			if err := os.Remove(file); err != nil {
-				slog.Warn("Failed to remove database file for old, dropped folder", slogutil.FilePath(base))
+				slogutil.Logger(s.sl).Warn("Failed to remove database file for old, dropped folder", slogutil.FilePath(base))
 			} else {
-				slog.Info("Cleaned out database file for old, dropped folder", slogutil.FilePath(base))
+				slogutil.Logger(s.sl).Info("Cleaned out database file for old, dropped folder", slogutil.FilePath(base))
 			}
 		}
 	}

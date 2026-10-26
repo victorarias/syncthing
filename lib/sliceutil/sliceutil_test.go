@@ -10,7 +10,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/syncthing/syncthing/lib/sliceutil"
+	"github.com/victorarias/syncthing/lib/sliceutil"
 )
 
 func TestRemoveAndZero(t *testing.T) {

@@ -12,14 +12,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/itererr"
-	"github.com/syncthing/syncthing/internal/slogutil"
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/ignore"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/semaphore"
-	"github.com/syncthing/syncthing/lib/versioner"
+	"github.com/victorarias/syncthing/internal/itererr"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/ignore"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/semaphore"
+	"github.com/victorarias/syncthing/lib/versioner"
 )
 
 func init() {
@@ -107,7 +107,7 @@ func (f *receiveOnlyFolder) revert(ctx context.Context) error {
 			return err
 		case !ok:
 			msg := "Unexpectedly missing global file that we have locally"
-			l.Debugf("%v revert: %v: %v", f, msg, fi.Name)
+			slogutil.Adapter(f.sl).Debugf("%v revert: %v: %v", f, msg, fi.Name)
 			f.evLogger.Log(events.Failure, msg)
 			continue
 		case gf.IsReceiveOnlyChanged():
@@ -118,7 +118,7 @@ func (f *receiveOnlyFolder) revert(ctx context.Context) error {
 				fi.Version = protocol.Vector{} // if this file ever resurfaces anywhere we want our delete to be strictly older
 				break
 			}
-			l.Debugf("Revert: deleting %s: %v\n", fi.Name, err)
+			slogutil.Adapter(f.sl).Debugf("Revert: deleting %s: %v\n", fi.Name, err)
 			handled, err := delQueue.handle(fi)
 			if err != nil {
 				continue

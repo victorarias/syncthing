@@ -10,7 +10,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/protocol"
 )
 
 // deviceFolderFileDownloadState holds current download state of a file that

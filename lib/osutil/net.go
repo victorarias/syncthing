@@ -10,7 +10,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/syncthing/syncthing/lib/netutil"
+	"github.com/victorarias/syncthing/lib/netutil"
 )
 
 // GetInterfaceAddrs returns the IP networks of all interfaces that are up.

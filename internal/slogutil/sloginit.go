@@ -9,7 +9,6 @@ package slogutil
 import (
 	"io"
 	"log/slog"
-	"os"
 	"time"
 )
 
@@ -27,21 +26,15 @@ var (
 	globalFormatter = &formattingOptions{
 		LineFormat: DefaultLineFormat,
 		recs:       []*lineRecorder{GlobalRecorder, ErrorRecorder},
-		out:        logWriter(),
+		out:        io.Discard,
 	}
 	slogDef = slog.New(&formattingHandler{opts: globalFormatter})
 )
 
-func logWriter() io.Writer {
-	if os.Getenv("LOGGER_DISCARD") != "" {
-		// Hack to completely disable logging, for example when running
-		// benchmarks.
-		return io.Discard
+// Logger returns the supplied instance logger, or a silent logger for standalone helpers.
+func Logger(loggers ...*slog.Logger) *slog.Logger {
+	if len(loggers) > 0 && loggers[0] != nil {
+		return loggers[0]
 	}
-
-	return os.Stdout
-}
-
-func init() {
-	slog.SetDefault(slogDef)
+	return slog.New(slog.DiscardHandler)
 }

@@ -22,13 +22,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/syncthing/syncthing/internal/slogutil"
-	"github.com/syncthing/syncthing/lib/build"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/netutil"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/sliceutil"
-	"github.com/syncthing/syncthing/lib/structutil"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/netutil"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/sliceutil"
+	"github.com/victorarias/syncthing/lib/structutil"
 )
 
 const (
@@ -92,6 +92,7 @@ var (
 )
 
 type Configuration struct {
+	sl                       *slog.Logger
 	Version                  int                   `json:"version" xml:"version,attr"`
 	Folders                  []FolderConfiguration `json:"folders" xml:"folder"`
 	Devices                  []DeviceConfiguration `json:"devices" xml:"device"`
@@ -420,7 +421,7 @@ func (cfg *Configuration) removeDeprecatedProtocols() {
 
 func (cfg *Configuration) applyMigrations() {
 	if cfg.Version > 0 && cfg.Version < OldestHandledVersion {
-		slog.Warn("Loaded deprecated configuration version; attempting best effort conversion, but please verify manually", "version", cfg.Version)
+		cfg.Logger().Warn("Loaded deprecated configuration version; attempting best effort conversion, but please verify manually", "version", cfg.Version)
 	}
 
 	// Upgrade configuration versions as appropriate
@@ -593,7 +594,7 @@ func ensureNoUntrustedTrustingSharing(f *FolderConfiguration, devices []FolderDe
 			continue
 		}
 		if devCfg := existingDevices[dev.DeviceID]; devCfg.Untrusted {
-			slog.Error("Folder is shared in trusted mode with untrusted device; unsharing", dev.DeviceID.LogAttr(), f.LogAttr())
+			f.Logger().Error("Folder is shared in trusted mode with untrusted device; unsharing", dev.DeviceID.LogAttr(), f.LogAttr())
 			devices = sliceutil.RemoveAndZero(devices, i)
 			i--
 		}
@@ -613,7 +614,7 @@ func cleanSymlinks(filesystem fs.Filesystem, dir string) {
 			return err
 		}
 		if info.IsSymlink() {
-			slog.Warn("Removing incorrectly versioned symlink", slogutil.FilePath(path))
+			fs.Logger(filesystem).Warn("Removing incorrectly versioned symlink", slogutil.FilePath(path))
 			filesystem.Remove(path)
 			return fs.SkipDir
 		}
@@ -707,4 +708,19 @@ func (i Ignores) Copy() Ignores {
 	out := Ignores{Lines: make([]string, len(i.Lines))}
 	copy(out.Lines, i.Lines)
 	return out
+}
+
+func (cfg *Configuration) Prepare(id protocol.DeviceID) error { return cfg.prepare(id) }
+
+func (cfg Configuration) Logger() *slog.Logger { return slogutil.Logger(cfg.sl) }
+
+func (cfg *Configuration) SetLogger(logger *slog.Logger) {
+	cfg.sl = slogutil.Logger(logger)
+	cfg.Defaults.Folder.sl, cfg.Defaults.Device.sl = cfg.sl, cfg.sl
+	for i := range cfg.Folders {
+		cfg.Folders[i].sl = cfg.sl
+	}
+	for i := range cfg.Devices {
+		cfg.Devices[i].sl = cfg.sl
+	}
 }

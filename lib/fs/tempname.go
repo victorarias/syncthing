@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/syncthing/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/build"
 )
 
 const (

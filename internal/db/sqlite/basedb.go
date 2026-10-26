@@ -21,9 +21,9 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/syncthing/syncthing/internal/slogutil"
-	"github.com/syncthing/syncthing/lib/build"
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/protocol"
 )
 
 const (
@@ -36,6 +36,7 @@ const (
 var embedded embed.FS
 
 type baseDB struct {
+	sl       *slog.Logger
 	path     string
 	baseName string
 	sql      *sqlx.DB
@@ -49,7 +50,7 @@ type baseDB struct {
 	tplInput      map[string]any
 }
 
-func openBase(path string, maxOpenConns, maxIdleConns int, pragmas, schemaScripts, migrationScripts []string) (*baseDB, error) {
+func openBase(path string, maxOpenConns, maxIdleConns int, pragmas, schemaScripts, migrationScripts []string, loggers ...*slog.Logger) (*baseDB, error) {
 	// Open the database with options to enable foreign keys and recursive
 	// triggers (needed for the delete+insert triggers on row replace).
 	pathURL := url.URL{
@@ -72,6 +73,7 @@ func openBase(path string, maxOpenConns, maxIdleConns int, pragmas, schemaScript
 	}
 
 	db := &baseDB{
+		sl:         slogutil.Logger(loggers...),
 		path:       path,
 		baseName:   filepath.Base(path),
 		sql:        sqlDB,
@@ -139,7 +141,7 @@ func openBase(path string, maxOpenConns, maxIdleConns int, pragmas, schemaScript
 				return false
 			}
 			if int(n) > ver.SchemaVersion {
-				slog.Info("Applying database migration", slogutil.FilePath(db.baseName), slog.String("script", scr))
+				slogutil.Logger(loggers...).Info("Applying database migration", slogutil.FilePath(db.baseName), slog.String("script", scr))
 				appliedMigrations = true
 				return true
 			}
@@ -317,7 +319,7 @@ nextScript:
 			if _, err := tx.Exec(s.expandTemplateVars(stmt)); err != nil {
 				if strings.Contains(stmt, "syncthing:ignore-failure") {
 					// We're ok with this failing. Just note it.
-					slog.Debug("Script failed, but with ignore-failure annotation", slog.String("script", scr), slogutil.Error(wrap(err, stmt)))
+					slogutil.Logger(s.sl).Debug("Script failed, but with ignore-failure annotation", slog.String("script", scr), slogutil.Error(wrap(err, stmt)))
 				} else {
 					return wrap(err, stmt)
 				}

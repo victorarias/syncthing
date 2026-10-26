@@ -21,13 +21,13 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/gobwas/glob"
+	"github.com/victorarias/syncthing/internal/glob"
 	"golang.org/x/text/unicode/norm"
 
-	"github.com/syncthing/syncthing/lib/build"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/ignore/ignoreresult"
-	"github.com/syncthing/syncthing/lib/osutil"
+	"github.com/victorarias/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/ignore/ignoreresult"
+	"github.com/victorarias/syncthing/lib/osutil"
 )
 
 const escapePrefix = "#escape"
@@ -637,4 +637,14 @@ func (c *modtimeChecker) Changed() bool {
 	}
 
 	return false
+}
+
+// ParseMemory parses fixed patterns without opening include files.
+func (m *Matcher) ParseMemory(lines []string) error {
+	for _, line := range strings.Split(strings.Join(lines, "\n"), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#include") {
+			return fmt.Errorf("in-memory ignores do not support #include: %s", line)
+		}
+	}
+	return m.Parse(strings.NewReader(strings.Join(lines, "\n")), "memory")
 }

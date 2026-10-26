@@ -18,11 +18,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/slogutil"
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/osutil"
-	"github.com/syncthing/syncthing/lib/stringutil"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/osutil"
+	"github.com/victorarias/syncthing/lib/stringutil"
 )
 
 var (
@@ -142,7 +142,7 @@ func archiveFile(method fs.CopyRangeMethod, srcFs, dstFs fs.Filesystem, filePath
 	filePath = osutil.NativeFilename(filePath)
 	info, err := srcFs.Lstat(filePath)
 	if fs.IsNotExist(err) {
-		l.Debugln("not archiving nonexistent file", filePath)
+		slogutil.Adapter(fs.Logger(srcFs)).Debugln("not archiving nonexistent file", filePath)
 		return nil
 	} else if err != nil {
 		return err
@@ -154,7 +154,7 @@ func archiveFile(method fs.CopyRangeMethod, srcFs, dstFs fs.Filesystem, filePath
 	_, err = dstFs.Stat(".")
 	if err != nil {
 		if fs.IsNotExist(err) {
-			slog.Debug("Creating versions dir")
+			fs.Logger(srcFs).Debug("Creating versions dir")
 			err := dstFs.MkdirAll(".", fs.ModePerm)
 			if err != nil {
 				return err
@@ -169,7 +169,7 @@ func archiveFile(method fs.CopyRangeMethod, srcFs, dstFs fs.Filesystem, filePath
 	inFolderPath := filepath.Dir(filePath)
 	err = dupDirTree(srcFs, dstFs, inFolderPath)
 	if err != nil {
-		l.Debugln("archiving", filePath, err)
+		slogutil.Adapter(fs.Logger(srcFs)).Debugln("archiving", filePath, err)
 		return err
 	}
 
@@ -177,7 +177,7 @@ func archiveFile(method fs.CopyRangeMethod, srcFs, dstFs fs.Filesystem, filePath
 
 	ver := tagger(file, now.Format(TimeFormat))
 	dst := filepath.Join(inFolderPath, ver)
-	l.Debugln("archiving", filePath, "moving to", dst)
+	slogutil.Adapter(fs.Logger(srcFs)).Debugln("archiving", filePath, "moving to", dst)
 	err = osutil.RenameOrCopy(method, srcFs, dstFs, filePath, dst)
 
 	mtime := info.ModTime()
@@ -301,9 +301,9 @@ func restoreFile(method fs.CopyRangeMethod, src, dst fs.Filesystem, filePath str
 		sourceFile = taggedFilePath
 		sourceMtime = info.ModTime()
 	} else if err == nil {
-		l.Debugln("restore:", taggedFilePath, "not regular")
+		slogutil.Adapter(fs.Logger(src)).Debugln("restore:", taggedFilePath, "not regular")
 	} else {
-		l.Debugln("restore:", taggedFilePath, err.Error())
+		slogutil.Adapter(fs.Logger(src)).Debugln("restore:", taggedFilePath, err.Error())
 	}
 
 	// Check for untagged file
@@ -337,7 +337,7 @@ func restoreFile(method fs.CopyRangeMethod, src, dst fs.Filesystem, filePath str
 func versionerFsFromFolderCfg(cfg config.FolderConfiguration) (versionsFs fs.Filesystem) {
 	folderFs := cfg.Filesystem()
 	if cfg.Versioning.FSPath == "" {
-		versionsFs = fs.NewFilesystem(folderFs.Type(), filepath.Join(folderFs.URI(), DefaultPath))
+		versionsFs = fs.NewFilesystem(folderFs.Type(), filepath.Join(folderFs.URI(), DefaultPath), &fs.OptionLogger{Logger: cfg.Logger()})
 	} else if cfg.Versioning.FSType == config.FilesystemTypeBasic {
 		// Expand any leading tildes for basic filesystems,
 		// before checking for absolute paths.
@@ -351,23 +351,23 @@ func versionerFsFromFolderCfg(cfg config.FolderConfiguration) (versionsFs fs.Fil
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(folderFs.URI(), path)
 		}
-		versionsFs = fs.NewFilesystem(cfg.Versioning.FSType.ToFS(), path)
+		versionsFs = fs.NewFilesystem(cfg.Versioning.FSType.ToFS(), path, &fs.OptionLogger{Logger: cfg.Logger()})
 	} else {
-		versionsFs = fs.NewFilesystem(cfg.Versioning.FSType.ToFS(), cfg.Versioning.FSPath)
+		versionsFs = fs.NewFilesystem(cfg.Versioning.FSType.ToFS(), cfg.Versioning.FSPath, &fs.OptionLogger{Logger: cfg.Logger()})
 	}
-	l.Debugf("%s (%s) folder using %s (%s) versioner dir", folderFs.URI(), folderFs.Type(), versionsFs.URI(), versionsFs.Type())
+	slogutil.Adapter(cfg.Logger()).Debugf("%s (%s) folder using %s (%s) versioner dir", folderFs.URI(), folderFs.Type(), versionsFs.URI(), versionsFs.Type())
 	return
 }
 
-func findAllVersions(fs fs.Filesystem, filePath string) []string {
+func findAllVersions(filesystem fs.Filesystem, filePath string) []string {
 	inFolderPath := filepath.Dir(filePath)
 	file := filepath.Base(filePath)
 
 	// Glob according to the new file~timestamp.ext pattern.
 	pattern := filepath.Join(inFolderPath, TagFilename(file, timeGlob))
-	versions, err := fs.Glob(pattern)
+	versions, err := filesystem.Glob(pattern)
 	if err != nil {
-		slog.Warn("Failed to glob for versions", slog.String("pattern", pattern), slogutil.Error(err))
+		fs.Logger(filesystem).Warn("Failed to glob for versions", slog.String("pattern", pattern), slogutil.Error(err))
 		return nil
 	}
 	versions = stringutil.UniqueTrimmedStrings(versions)
@@ -377,7 +377,7 @@ func findAllVersions(fs fs.Filesystem, filePath string) []string {
 }
 
 func clean(ctx context.Context, versionsFs fs.Filesystem, toRemove func([]string, time.Time) []string) error {
-	l.Debugln("Versioner clean: Cleaning", versionsFs)
+	slogutil.Adapter(fs.Logger(versionsFs)).Debugln("Versioner clean: Cleaning", versionsFs)
 
 	if _, err := versionsFs.Stat("."); fs.IsNotExist(err) {
 		// There is no need to clean a nonexistent dir.
@@ -417,7 +417,7 @@ func clean(ctx context.Context, versionsFs fs.Filesystem, toRemove func([]string
 
 	if err := versionsFs.Walk(".", walkFn); err != nil {
 		if !errors.Is(err, context.Canceled) {
-			slog.WarnContext(ctx, "Failed to scan versions directory", slogutil.Error(err))
+			fs.Logger(versionsFs).WarnContext(ctx, "Failed to scan versions directory", slogutil.Error(err))
 		}
 		return err
 	}
@@ -433,15 +433,15 @@ func clean(ctx context.Context, versionsFs fs.Filesystem, toRemove func([]string
 
 	dirTracker.deleteEmptyDirs(versionsFs)
 
-	l.Debugln("Cleaner: Finished cleaning", versionsFs)
+	slogutil.Adapter(fs.Logger(versionsFs)).Debugln("Cleaner: Finished cleaning", versionsFs)
 	return nil
 }
 
 func cleanVersions(versionsFs fs.Filesystem, versions []string, toRemove func([]string, time.Time) []string) {
-	l.Debugln("Versioner: Expiring versions", versions)
+	slogutil.Adapter(fs.Logger(versionsFs)).Debugln("Versioner: Expiring versions", versions)
 	for _, file := range toRemove(versions, time.Now()) {
 		if err := versionsFs.Remove(file); err != nil {
-			slog.Warn("Failed to remove versioned file during cleanup", slogutil.FilePath(file), slogutil.Error(err))
+			fs.Logger(versionsFs).Warn("Failed to remove versioned file during cleanup", slogutil.FilePath(file), slogutil.Error(err))
 		}
 	}
 }

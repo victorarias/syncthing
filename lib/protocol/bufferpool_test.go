@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syncthing/syncthing/lib/rand"
+	"github.com/victorarias/syncthing/lib/rand"
 )
 
 func TestGetBucketNumbers(t *testing.T) {

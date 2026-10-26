@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/itererr"
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/scanner"
+	"github.com/victorarias/syncthing/internal/itererr"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/scanner"
 )
 
 func TestRecvOnlyRevertDeletes(t *testing.T) {
@@ -40,7 +40,7 @@ func TestRecvOnlyRevertDeletes(t *testing.T) {
 	}
 	writeFilePerm(t, ffs, "ignDir/ignFile", []byte("hello\n"), 0o644)
 	writeFilePerm(t, ffs, "unknownDir/unknownFile", []byte("hello\n"), 0o644)
-	writeFilePerm(t, ffs, ".stignore", []byte("ignDir\n"), 0o644)
+	must(t, f.ignores.ParseMemory([]string{"ignDir"}))
 
 	knownFiles := setupKnownFiles(t, ffs, []byte("hello\n"))
 

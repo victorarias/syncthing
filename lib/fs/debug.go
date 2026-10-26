@@ -7,7 +7,7 @@
 package fs
 
 import (
-	"github.com/syncthing/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/internal/slogutil"
 )
 
 var l = slogutil.NewAdapter("Filesystem access")

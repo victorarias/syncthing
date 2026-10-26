@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"path"
 	"strings"
@@ -28,8 +29,9 @@ import (
 	lz4 "github.com/pierrec/lz4/v4"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/syncthing/syncthing/internal/gen/bep"
-	"github.com/syncthing/syncthing/internal/protoutil"
+	"github.com/victorarias/syncthing/internal/gen/bep"
+	"github.com/victorarias/syncthing/internal/protoutil"
+	"github.com/victorarias/syncthing/internal/slogutil"
 )
 
 const (
@@ -163,6 +165,7 @@ type ConnectionInfo interface {
 }
 
 type rawConnection struct {
+	sl *slog.Logger
 	ConnectionInfo
 
 	deviceID  DeviceID
@@ -219,7 +222,7 @@ const (
 // Should not be modified in production code, just for testing.
 var CloseTimeout = 10 * time.Second
 
-func NewConnection(deviceID DeviceID, reader io.Reader, writer io.Writer, closer io.Closer, model Model, connInfo ConnectionInfo, compress Compression, keyGen *KeyGenerator) Connection {
+func NewConnection(deviceID DeviceID, reader io.Reader, writer io.Writer, closer io.Closer, model Model, connInfo ConnectionInfo, compress Compression, keyGen *KeyGenerator, loggers ...*slog.Logger) Connection {
 	// We create the wrapper for the model first, as it needs to be passed
 	// in at the lowest level in the stack. At the end of construction,
 	// before returning, we add the connection to cwm so that it can be used
@@ -233,7 +236,7 @@ func NewConnection(deviceID DeviceID, reader io.Reader, writer io.Writer, closer
 
 	// We do the wire format conversion first (outermost) so that the
 	// metadata is in wire format when it reaches the encryption step.
-	rc := newRawConnection(deviceID, reader, writer, closer, em, connInfo, compress)
+	rc := newRawConnection(deviceID, reader, writer, closer, em, connInfo, compress, loggers...)
 	ec := newEncryptedConnection(rc, rc, em.folderKeys, keyGen)
 	wc := wireFormatConnection{ec}
 
@@ -241,13 +244,14 @@ func NewConnection(deviceID DeviceID, reader io.Reader, writer io.Writer, closer
 	return wc
 }
 
-func newRawConnection(deviceID DeviceID, reader io.Reader, writer io.Writer, closer io.Closer, receiver rawModel, connInfo ConnectionInfo, compress Compression) *rawConnection {
+func newRawConnection(deviceID DeviceID, reader io.Reader, writer io.Writer, closer io.Closer, receiver rawModel, connInfo ConnectionInfo, compress Compression, loggers ...*slog.Logger) *rawConnection {
 	idString := deviceID.String()
 	cr := &countingReader{Reader: reader, idString: idString}
 	cw := &countingWriter{Writer: writer, idString: idString}
 	registerDeviceMetrics(idString)
 
 	return &rawConnection{
+		sl:                    slogutil.Logger(loggers...),
 		ConnectionInfo:        connInfo,
 		deviceID:              deviceID,
 		idString:              deviceID.String(),
@@ -448,7 +452,7 @@ func (c *rawConnection) dispatcherLoop() (err error) {
 		if err != nil {
 			return fmt.Errorf("protocol error: %w", err)
 		}
-		l.Debugf("handle %v message", msgContext)
+		slogutil.Adapter(c.sl).Debugf("handle %v message", msgContext)
 
 		switch msg := msg.(type) {
 		case *bep.ClusterConfig:
@@ -606,12 +610,12 @@ func (c *rawConnection) readHeader(fourByteBuf []byte) (*bep.Header, error) {
 }
 
 func (c *rawConnection) handleIndex(im *Index) error {
-	l.Debugf("Index(%v, %v, %d file)", c.deviceID, im.Folder, len(im.Files))
+	slogutil.Adapter(c.sl).Debugf("Index(%v, %v, %d file)", c.deviceID, im.Folder, len(im.Files))
 	return c.model.Index(im)
 }
 
 func (c *rawConnection) handleIndexUpdate(im *IndexUpdate) error {
-	l.Debugf("queueing IndexUpdate(%v, %v, %d files)", c.deviceID, im.Folder, len(im.Files))
+	slogutil.Adapter(c.sl).Debugf("queueing IndexUpdate(%v, %v, %d files)", c.deviceID, im.Folder, len(im.Files))
 	return c.model.IndexUpdate(im)
 }
 
@@ -786,7 +790,7 @@ func (c *rawConnection) writerLoop() {
 
 func (c *rawConnection) writeMessage(msg proto.Message) error {
 	msgContext, _ := messageContext(msg)
-	l.Debugf("Writing %v", msgContext)
+	slogutil.Adapter(c.sl).Debugf("Writing %v", msgContext)
 
 	defer func() {
 		metricDeviceSentMessages.WithLabelValues(c.idString).Inc()
@@ -831,7 +835,7 @@ func (c *rawConnection) writeMessage(msg proto.Message) error {
 
 	n, err := c.cw.Write(buf)
 
-	l.Debugf("wrote %d bytes on the wire (2 bytes length, %d bytes header, 4 bytes message length, %d bytes message), err=%v", n, hdrSize, size, err)
+	slogutil.Adapter(c.sl).Debugf("wrote %d bytes on the wire (2 bytes length, %d bytes header, 4 bytes message length, %d bytes message), err=%v", n, hdrSize, size, err)
 	if err != nil {
 		return fmt.Errorf("writing message: %w", err)
 	}
@@ -879,7 +883,7 @@ func (c *rawConnection) writeCompressedMessage(msg proto.Message, marshaled []by
 	binary.BigEndian.PutUint32(buf[2+hdrSize:], uint32(compressedSize))
 
 	n, err := c.cw.Write(buf[:totSize])
-	l.Debugf("wrote %d bytes on the wire (2 bytes length, %d bytes header, 4 bytes message length, %d bytes message (%d uncompressed)), err=%v", n, hdrSize, compressedSize, len(marshaled), err)
+	slogutil.Adapter(c.sl).Debugf("wrote %d bytes on the wire (2 bytes length, %d bytes header, 4 bytes message length, %d bytes message (%d uncompressed)), err=%v", n, hdrSize, compressedSize, len(marshaled), err)
 	if err != nil {
 		return true, fmt.Errorf("writing message: %w", err)
 	}
@@ -955,6 +959,14 @@ func (c *rawConnection) shouldCompressMessage(msg proto.Message) bool {
 // BEP message is sent before terminating the actual connection. The error
 // argument specifies the reason for closing the connection.
 func (c *rawConnection) Close(err error) {
+	c.startStopMut.Lock()
+	started := !c.startTime.IsZero()
+	c.startStopMut.Unlock()
+	if !started {
+		go c.internalClose(err)
+		return
+	}
+
 	c.sendCloseOnce.Do(func() {
 		done := make(chan struct{})
 		timeout := time.NewTimer(CloseTimeout)
@@ -982,9 +994,9 @@ func (c *rawConnection) internalClose(err error) {
 	c.closeOnce.Do(func() {
 		c.startStopMut.Lock()
 
-		l.Debugf("close connection to %s at %s due to %v", c.deviceID.Short(), c.ConnectionInfo, err)
+		slogutil.Adapter(c.sl).Debugf("close connection to %s at %s due to %v", c.deviceID.Short(), c.ConnectionInfo, err)
 		if cerr := c.closer.Close(); cerr != nil {
-			l.Debugf("failed to close underlying conn %s at %s %v:", c.deviceID.Short(), c.ConnectionInfo, cerr)
+			slogutil.Adapter(c.sl).Debugf("failed to close underlying conn %s at %s %v:", c.deviceID.Short(), c.ConnectionInfo, cerr)
 		}
 		close(c.closed)
 
@@ -1025,11 +1037,11 @@ func (c *rawConnection) pingSender() {
 		case <-ticker.C:
 			d := time.Since(c.cw.Last())
 			if d < PingSendInterval/2 {
-				l.Debugln(c.deviceID, "ping skipped after wr", d)
+				slogutil.Adapter(c.sl).Debugln(c.deviceID, "ping skipped after wr", d)
 				continue
 			}
 
-			l.Debugln(c.deviceID, "ping -> after", d)
+			slogutil.Adapter(c.sl).Debugln(c.deviceID, "ping -> after", d)
 			c.ping()
 
 		case <-c.closed:
@@ -1050,11 +1062,11 @@ func (c *rawConnection) pingReceiver() {
 		case <-ticker.C:
 			d := time.Since(c.cr.Last())
 			if d > ReceiveTimeout {
-				l.Debugln(c.deviceID, "ping timeout", d)
+				slogutil.Adapter(c.sl).Debugln(c.deviceID, "ping timeout", d)
 				c.internalClose(ErrTimeout)
 			}
 
-			l.Debugln(c.deviceID, "last read within", d)
+			slogutil.Adapter(c.sl).Debugln(c.deviceID, "last read within", d)
 
 		case <-c.closed:
 			return

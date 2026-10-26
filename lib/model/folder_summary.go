@@ -18,11 +18,12 @@ import (
 
 	"github.com/thejerf/suture/v4"
 
-	"github.com/syncthing/syncthing/internal/db"
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/svcutil"
+	"github.com/victorarias/syncthing/internal/db"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/svcutil"
 )
 
 type FolderSummaryService interface {
@@ -403,7 +404,7 @@ func (c *folderSummaryService) sendSummary(ctx context.Context, folder string) {
 		// remote device.
 		comp, err := c.model.Completion(devCfg.DeviceID, folder)
 		if err != nil {
-			l.Debugf("Error getting completion for folder %v, device %v: %v", folder, devCfg.DeviceID, err)
+			slogutil.Adapter(slogutil.Logger()).Debugf("Error getting completion for folder %v, device %v: %v", folder, devCfg.DeviceID, err)
 			continue
 		}
 		ev := comp.Map()

@@ -13,10 +13,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/rand"
-	"github.com/syncthing/syncthing/lib/stringutil"
-	"github.com/syncthing/syncthing/lib/structutil"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/rand"
+	"github.com/victorarias/syncthing/lib/stringutil"
+	"github.com/victorarias/syncthing/lib/structutil"
 )
 
 type OptionsConfiguration struct {
@@ -182,14 +183,14 @@ func (opts OptionsConfiguration) StunServers() []string {
 		case "default":
 			_, records, err := net.LookupSRV("stun", "udp", "syncthing.net")
 			if err != nil {
-				l.Debugln("Unable to resolve primary STUN servers via DNS:", err)
+				slogutil.Adapter(slogutil.Logger()).Debugln("Unable to resolve primary STUN servers via DNS:", err)
 			}
 
 			for _, record := range records {
 				priority := record.Priority
 				target := strings.TrimSuffix(record.Target, ".")
 				address := fmt.Sprintf("%s:%d", target, record.Port)
-				l.Debugf("Resolved primary STUN server %s with priority %d", address, priority)
+				slogutil.Adapter(slogutil.Logger()).Debugf("Resolved primary STUN server %s with priority %d", address, priority)
 				addresses = append(addresses, address)
 			}
 

@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/syncthing/notify"
+	"github.com/victorarias/syncthing/internal/slogutil"
 )
 
 // Notify does not block on sending to channel, so the channel must be buffered.
@@ -78,7 +79,7 @@ func (f *BasicFilesystem) watchLoop(ctx context.Context, name string, roots []st
 			}
 			// When next scheduling a scan, do it on the entire folder as events have been lost.
 			outChan <- Event{Name: name, Type: NonRemove}
-			l.Debugln(f.Type(), f.URI(), "Watch: Event overflow, send \".\"")
+			slogutil.Adapter(Logger(f)).Debugln(f.Type(), f.URI(), "Watch: Event overflow, send \".\"")
 		}
 
 		select {
@@ -86,7 +87,7 @@ func (f *BasicFilesystem) watchLoop(ctx context.Context, name string, roots []st
 			evPath := ev.Path()
 
 			if !utf8.ValidString(evPath) {
-				l.Debugln(f.Type(), f.URI(), "Watch: Ignoring invalid UTF-8")
+				slogutil.Adapter(Logger(f)).Debugln(f.Type(), f.URI(), "Watch: Ignoring invalid UTF-8")
 				continue
 			}
 
@@ -94,30 +95,30 @@ func (f *BasicFilesystem) watchLoop(ctx context.Context, name string, roots []st
 			if err != nil {
 				select {
 				case errChan <- err:
-					l.Debugln(f.Type(), f.URI(), "Watch: Sending error", err)
+					slogutil.Adapter(Logger(f)).Debugln(f.Type(), f.URI(), "Watch: Sending error", err)
 				case <-ctx.Done():
 				}
 				notify.Stop(backendChan)
-				l.Debugln(f.Type(), f.URI(), "Watch: Stopped due to", err)
+				slogutil.Adapter(Logger(f)).Debugln(f.Type(), f.URI(), "Watch: Stopped due to", err)
 				return
 			}
 
 			if ignore.Match(relPath).IsIgnored() {
-				l.Debugln(f.Type(), f.URI(), "Watch: Ignoring", relPath)
+				slogutil.Adapter(Logger(f)).Debugln(f.Type(), f.URI(), "Watch: Ignoring", relPath)
 				continue
 			}
 			evType := f.eventType(ev.Event())
 			select {
 			case outChan <- Event{Name: relPath, Type: evType}:
-				l.Debugln(f.Type(), f.URI(), "Watch: Sending", relPath, evType)
+				slogutil.Adapter(Logger(f)).Debugln(f.Type(), f.URI(), "Watch: Sending", relPath, evType)
 			case <-ctx.Done():
 				notify.Stop(backendChan)
-				l.Debugln(f.Type(), f.URI(), "Watch: Stopped")
+				slogutil.Adapter(Logger(f)).Debugln(f.Type(), f.URI(), "Watch: Stopped")
 				return
 			}
 		case <-ctx.Done():
 			notify.Stop(backendChan)
-			l.Debugln(f.Type(), f.URI(), "Watch: Stopped")
+			slogutil.Adapter(Logger(f)).Debugln(f.Type(), f.URI(), "Watch: Stopped")
 			return
 		}
 	}

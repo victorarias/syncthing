@@ -15,9 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/syncthing/syncthing/lib/build"
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/fs"
 
 	"github.com/kballard/go-shellquote"
 )
@@ -46,7 +47,7 @@ func newExternal(cfg config.FolderConfiguration) Versioner {
 		filesystem: cfg.Filesystem(),
 	}
 
-	l.Debugf("instantiated %#v", s)
+	slogutil.Adapter(cfg.Logger()).Debugf("instantiated %#v", s)
 	return s
 }
 
@@ -55,7 +56,7 @@ func newExternal(cfg config.FolderConfiguration) Versioner {
 func (v external) Archive(filePath string) error {
 	info, err := v.filesystem.Lstat(filePath)
 	if fs.IsNotExist(err) {
-		l.Debugln("not archiving nonexistent file", filePath)
+		slogutil.Adapter(fs.Logger(v.filesystem)).Debugln("not archiving nonexistent file", filePath)
 		return nil
 	} else if err != nil {
 		return err
@@ -64,7 +65,7 @@ func (v external) Archive(filePath string) error {
 		panic("bug: attempting to version a symlink")
 	}
 
-	l.Debugln("archiving", filePath)
+	slogutil.Adapter(fs.Logger(v.filesystem)).Debugln("archiving", filePath)
 
 	if v.command == "" {
 		return errors.New("command is empty, please enter a valid command")
@@ -76,7 +77,7 @@ func (v external) Archive(filePath string) error {
 	}
 
 	combinedOutput, err := cmd.CombinedOutput()
-	l.Debugln("external command output:", string(combinedOutput))
+	slogutil.Adapter(fs.Logger(v.filesystem)).Debugln("external command output:", string(combinedOutput))
 	if err != nil {
 		eerr := &exec.ExitError{}
 		if errors.As(err, &eerr) && len(eerr.Stderr) > 0 {

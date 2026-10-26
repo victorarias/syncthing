@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/syncthing/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/config"
 )
 
 type Versioner interface {

@@ -10,20 +10,23 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log/slog"
 	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/syncthing/syncthing/internal/protoutil"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/osutil"
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/internal/protoutil"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/osutil"
+	"github.com/victorarias/syncthing/lib/protocol"
 )
 
 // A sharedPullerState is kept for each file that is being synced and is kept
 // updated along the way.
 type sharedPullerState struct {
+	sl *slog.Logger
 	// Immutable, does not require locking
 	file          protocol.FileInfo // The new file (desired end state)
 	fs            fs.Filesystem
@@ -54,7 +57,7 @@ type sharedPullerState struct {
 	mut              sync.RWMutex    // Protects the above
 }
 
-func newSharedPullerState(file protocol.FileInfo, fs fs.Filesystem, folderID, tempName string, blocks []protocol.BlockInfo, reused []int, ignorePerms, hasCurFile bool, curFile protocol.FileInfo, sparse bool, fsync bool) *sharedPullerState {
+func newSharedPullerState(file protocol.FileInfo, filesystem fs.Filesystem, folderID, tempName string, blocks []protocol.BlockInfo, reused []int, ignorePerms, hasCurFile bool, curFile protocol.FileInfo, sparse bool, fsync bool) *sharedPullerState {
 	// Map the existing blocks by hash to block index in the current file
 	blocksMap := make(map[string]int, len(curFile.Blocks))
 	for idx, block := range curFile.Blocks {
@@ -62,8 +65,9 @@ func newSharedPullerState(file protocol.FileInfo, fs fs.Filesystem, folderID, te
 	}
 
 	return &sharedPullerState{
+		sl:               fs.Logger(filesystem),
 		file:             file,
-		fs:               fs,
+		fs:               filesystem,
 		folder:           folderID,
 		tempName:         tempName,
 		realName:         file.Name,
@@ -120,7 +124,7 @@ func (w *lockedWriterAt) SyncClose(fsync bool) error {
 		if err := w.fd.Sync(); err != nil {
 			// Sync() is nice if it works but not worth failing the
 			// operation over if it fails.
-			l.Debugf("fsync failed: %v", err)
+			slogutil.Adapter(slogutil.Logger()).Debugf("fsync failed: %v", err)
 		}
 	}
 	return w.fd.Close()
@@ -222,7 +226,7 @@ func (s *sharedPullerState) tempFileInWritableDir(_ string) error {
 				fd.Close()
 
 				if remErr := s.fs.Remove(s.tempName); remErr != nil {
-					l.Debugln("failed to remove temporary file:", remErr)
+					slogutil.Adapter(s.sl).Debugln("failed to remove temporary file:", remErr)
 				}
 
 				return err
@@ -266,7 +270,7 @@ func (s *sharedPullerState) copyDone(block protocol.BlockInfo) {
 	s.updated = time.Now()
 	s.available = append(s.available, int(block.Offset/int64(s.file.BlockSize())))
 	s.availableUpdated = time.Now()
-	l.Debugln("sharedPullerState", s.folder, s.file.Name, "copyNeeded ->", s.copyNeeded)
+	slogutil.Adapter(s.sl).Debugln("sharedPullerState", s.folder, s.file.Name, "copyNeeded ->", s.copyNeeded)
 	s.mut.Unlock()
 }
 
@@ -298,7 +302,7 @@ func (s *sharedPullerState) pullStarted() {
 	s.pullTotal++
 	s.pullNeeded++
 	s.updated = time.Now()
-	l.Debugln("sharedPullerState", s.folder, s.file.Name, "pullNeeded start ->", s.pullNeeded)
+	slogutil.Adapter(s.sl).Debugln("sharedPullerState", s.folder, s.file.Name, "pullNeeded start ->", s.pullNeeded)
 	s.mut.Unlock()
 }
 
@@ -308,7 +312,7 @@ func (s *sharedPullerState) pullDone(block protocol.BlockInfo) {
 	s.updated = time.Now()
 	s.available = append(s.available, int(block.Offset/int64(s.file.BlockSize())))
 	s.availableUpdated = time.Now()
-	l.Debugln("sharedPullerState", s.folder, s.file.Name, "pullNeeded done ->", s.pullNeeded)
+	slogutil.Adapter(s.sl).Debugln("sharedPullerState", s.folder, s.file.Name, "pullNeeded done ->", s.pullNeeded)
 	s.mut.Unlock()
 	metricFolderProcessedBytesTotal.WithLabelValues(s.folder, metricSourceNetwork).Add(float64(block.Size))
 }

@@ -13,7 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/syncthing/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/build"
 )
 
 func TestCommonPrefix(t *testing.T) {

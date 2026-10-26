@@ -10,10 +10,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"net"
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/syncthing/syncthing/internal/gen/bep"
+	"github.com/victorarias/syncthing/internal/gen/bep"
 )
 
 const (
@@ -62,14 +63,28 @@ func (Hello) Magic() uint32 {
 	return HelloMessageMagic
 }
 
-func ExchangeHello(c io.ReadWriter, h Hello) (Hello, error) {
+func ExchangeHello(c net.Conn, h Hello) (Hello, error) {
 	if h.Timestamp == 0 {
 		panic("bug: missing timestamp in outgoing hello")
 	}
-	if err := writeHello(c, h); err != nil {
+	written := make(chan error, 1)
+	go func() {
+		err := writeHello(c, h)
+		if err != nil {
+			c.Close()
+		}
+		written <- err
+	}()
+	hello, err := readHello(c)
+	if err != nil {
+		c.Close()
+		<-written
 		return Hello{}, err
 	}
-	return readHello(c)
+	if err := <-written; err != nil {
+		return Hello{}, err
+	}
+	return hello, nil
 }
 
 // IsVersionMismatch returns true if the error is a reliable indication of a

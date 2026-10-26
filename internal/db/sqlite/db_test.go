@@ -18,12 +18,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/db"
-	"github.com/syncthing/syncthing/internal/itererr"
-	"github.com/syncthing/syncthing/internal/timeutil"
-	"github.com/syncthing/syncthing/lib/build"
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/internal/db"
+	"github.com/victorarias/syncthing/internal/itererr"
+	"github.com/victorarias/syncthing/internal/timeutil"
+	"github.com/victorarias/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/protocol"
 )
 
 const (
@@ -71,11 +71,11 @@ func TestBasics(t *testing.T) {
 		t.Fatal(err)
 	}
 	const (
-		localSize      = (1+2+3)*blockSize
+		localSize      = (1 + 2 + 3) * blockSize
 		remoteSize     = (3 + 4 + 5) * blockSize
-		globalSize     = (2+3+3+4+5)*blockSize
+		globalSize     = (2 + 3 + 3 + 4 + 5) * blockSize
 		needSizeLocal  = remoteSize
-		needSizeRemote = (2+3)*blockSize
+		needSizeRemote = (2 + 3) * blockSize
 	)
 
 	t.Run("SchemaVersion", func(t *testing.T) {

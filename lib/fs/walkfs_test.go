@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/syncthing/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/build"
 )
 
 func testWalkSkipSymlink(t *testing.T, fsType FilesystemType, uri string) {

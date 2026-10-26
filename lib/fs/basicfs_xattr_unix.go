@@ -15,7 +15,8 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/protocol"
 	"golang.org/x/sys/unix"
 )
 
@@ -34,7 +35,7 @@ func (f *BasicFilesystem) GetXattr(path string, xattrFilter XattrFilter) ([]prot
 	var totSize int
 	for _, attr := range attrs {
 		if !xattrFilter.Permit(attr) {
-			l.Debugf("get xattr %s: skipping attribute %q denied by filter", path, attr)
+			slogutil.Adapter(Logger(f)).Debugf("get xattr %s: skipping attribute %q denied by filter", path, attr)
 			continue
 		}
 		val, err := getXattr(path, attr)
@@ -47,12 +48,12 @@ func (f *BasicFilesystem) GetXattr(path string, xattrFilter XattrFilter) ([]prot
 			return nil, fmt.Errorf("get xattr %s: %w", path, err)
 		}
 		if max := xattrFilter.GetMaxSingleEntrySize(); max > 0 && len(attr)+len(val) > max {
-			l.Debugf("get xattr %s: attribute %q exceeds max size", path, attr)
+			slogutil.Adapter(Logger(f)).Debugf("get xattr %s: attribute %q exceeds max size", path, attr)
 			continue
 		}
 		totSize += len(attr) + len(val)
 		if max := xattrFilter.GetMaxTotalSize(); max > 0 && totSize > max {
-			l.Debugf("get xattr %s: attribute %q would cause max size to be exceeded", path, attr)
+			slogutil.Adapter(Logger(f)).Debugf("get xattr %s: attribute %q would cause max size to be exceeded", path, attr)
 			continue
 		}
 		res = append(res, protocol.Xattr{

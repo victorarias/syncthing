@@ -11,7 +11,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/protocol"
 )
 
 var someBlocks = []protocol.BlockInfo{{Offset: 1}, {Offset: 2}, {Offset: 3}}

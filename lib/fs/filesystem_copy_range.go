@@ -9,6 +9,8 @@ package fs
 import (
 	"sync"
 	"syscall"
+
+	"github.com/victorarias/syncthing/internal/slogutil"
 )
 
 var (
@@ -22,7 +24,7 @@ func registerCopyRangeImplementation(copyMethod CopyRangeMethod, impl copyRangeI
 	mut.Lock()
 	defer mut.Unlock()
 
-	l.Debugln("Registering " + copyMethod.String() + " copyRange method")
+	slogutil.Adapter(slogutil.Logger()).Debugln("Registering " + copyMethod.String() + " copyRange method")
 
 	copyRangeMethods[copyMethod] = impl
 }

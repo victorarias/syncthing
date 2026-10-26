@@ -12,15 +12,15 @@ import (
 	"fmt"
 	"io"
 	"iter"
-	"log/slog"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/db"
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/rand"
+	"github.com/victorarias/syncthing/internal/db"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/rand"
 )
 
 var errNoSuchFolder = errors.New("no such folder")
@@ -79,7 +79,7 @@ func (s *DB) getFolderDB(folder string, create bool) (*folderDB, error) {
 		}
 	}
 
-	slog.Debug("Folder database opened", "folder", folder, "db", dbName)
+	slogutil.Logger(s.sl).Debug("Folder database opened", "folder", folder, "db", dbName)
 	path := dbName
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(s.pathBase, dbName)

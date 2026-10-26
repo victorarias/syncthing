@@ -10,11 +10,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/svcutil"
 	"github.com/thejerf/suture/v4"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/svcutil"
 )
 
 var errSvcNotFound = errors.New("service not found")
@@ -31,13 +32,13 @@ type serviceMap[K comparable, S suture.Service] struct {
 	eventLogger events.Logger
 }
 
-func newServiceMap[K comparable, S suture.Service](eventLogger events.Logger) *serviceMap[K, S] {
+func newServiceMap[K comparable, S suture.Service](eventLogger events.Logger, loggers ...*slog.Logger) *serviceMap[K, S] {
 	m := &serviceMap[K, S]{
 		services:    make(map[K]S),
 		tokens:      make(map[K]suture.ServiceToken),
 		eventLogger: eventLogger,
 	}
-	m.supervisor = suture.New(m.String(), svcutil.SpecWithDebugLogger())
+	m.supervisor = suture.New(m.String(), svcutil.SpecWithDebugLogger(loggers...))
 	return m
 }
 

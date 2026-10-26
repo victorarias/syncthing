@@ -20,16 +20,17 @@ import (
 	metrics "github.com/rcrowley/go-metrics"
 	"golang.org/x/text/unicode/norm"
 
-	"github.com/syncthing/syncthing/internal/slogutil"
-	"github.com/syncthing/syncthing/lib/build"
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/ignore"
-	"github.com/syncthing/syncthing/lib/osutil"
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/ignore"
+	"github.com/victorarias/syncthing/lib/osutil"
+	"github.com/victorarias/syncthing/lib/protocol"
 )
 
 type Config struct {
+	Logger *slog.Logger `json:"-" xml:"-"`
 	// Folder for which the walker has been created
 	Folder string
 	// Limit walking to these paths within Dir, or no limit if Sub is empty
@@ -124,7 +125,7 @@ type walker struct {
 // Walk returns the list of files found in the local folder by scanning the
 // file system. Files are blockwise hashed.
 func (w *walker) walk(ctx context.Context) chan ScanResult {
-	l.Debugln(w, "Walk", w.Subs, w.Matcher)
+	slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "Walk", w.Subs, w.Matcher)
 
 	toHashChan := make(chan protocol.FileInfo)
 	finishedChan := make(chan ScanResult)
@@ -180,7 +181,7 @@ func (w *walker) walk(ctx context.Context) chan ScanResult {
 			emitProgressEvent := func() {
 				current := progress.Total()
 				rate := progress.Rate()
-				l.Debugf("%v: Walk %s %s current progress %d/%d at %.01f MiB/s (%d%%)", w, w.Folder, w.Subs, current, total, rate/1024/1024, current*100/total)
+				slogutil.Adapter(slogutil.Logger(w.Logger)).Debugf("%v: Walk %s %s current progress %d/%d at %.01f MiB/s (%d%%)", w, w.Folder, w.Subs, current, total, rate/1024/1024, current*100/total)
 				w.EventLogger.Log(events.FolderScanProgress, map[string]any{
 					"folder":  w.Folder,
 					"current": current,
@@ -195,7 +196,7 @@ func (w *walker) walk(ctx context.Context) chan ScanResult {
 				select {
 				case <-done:
 					emitProgressEvent()
-					l.Debugln(w, "Walk progress done", w.Folder, w.Subs, w.Matcher)
+					slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "Walk progress done", w.Folder, w.Subs, w.Matcher)
 					return
 				case <-ticker.C:
 					emitProgressEvent()
@@ -207,7 +208,7 @@ func (w *walker) walk(ctx context.Context) chan ScanResult {
 
 	loop:
 		for _, file := range filesToHash {
-			l.Debugln(w, "real to hash:", file.Name)
+			slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "real to hash:", file.Name)
 			select {
 			case realToHashChan <- file:
 			case <-ctx.Done():
@@ -221,7 +222,7 @@ func (w *walker) walk(ctx context.Context) chan ScanResult {
 }
 
 func (w *walker) walkWithoutHashing(ctx context.Context) chan ScanResult {
-	l.Debugln(w, "Walk without hashing", w.Subs, w.Matcher)
+	slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "Walk without hashing", w.Subs, w.Matcher)
 
 	toHashChan := make(chan protocol.FileInfo)
 	finishedChan := make(chan ScanResult)
@@ -247,17 +248,17 @@ func (w *walker) scan(ctx context.Context, toHashChan chan<- protocol.FileInfo, 
 	if len(w.Subs) == 0 {
 		if err := w.Filesystem.Walk(".", hashFiles); isWarnableError(err) {
 			w.EventLogger.Log(events.Failure, walkFailureEventDesc)
-			slog.ErrorContext(ctx, "Aborted scan due to an unexpected error", slogutil.Error(err))
+			slogutil.Logger(w.Logger).ErrorContext(ctx, "Aborted scan due to an unexpected error", slogutil.Error(err))
 		}
 	} else {
 		for _, sub := range w.Subs {
 			if err := osutil.TraversesSymlink(w.Filesystem, filepath.Dir(sub)); err != nil {
-				l.Debugf("%v: Skip walking %v as it is below a symlink", w, sub)
+				slogutil.Adapter(slogutil.Logger(w.Logger)).Debugf("%v: Skip walking %v as it is below a symlink", w, sub)
 				continue
 			}
 			if err := w.Filesystem.Walk(sub, hashFiles); isWarnableError(err) {
 				w.EventLogger.Log(events.Failure, walkFailureEventDesc)
-				slog.ErrorContext(ctx, "Aborted scan due to an unexpected error", slogutil.FilePath(sub), slogutil.Error(err))
+				slogutil.Logger(w.Logger).ErrorContext(ctx, "Aborted scan due to an unexpected error", slogutil.FilePath(sub), slogutil.Error(err))
 			}
 		}
 	}
@@ -312,16 +313,16 @@ func (w *walker) walkAndHashFiles(ctx context.Context, toHashChan chan<- protoco
 		}
 
 		if fs.IsTemporary(path) {
-			l.Debugln(w, "temporary:", path, "err:", err)
+			slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "temporary:", path, "err:", err)
 			if err == nil && info.IsRegular() && info.ModTime().Add(w.TempLifetime).Before(now) {
 				w.Filesystem.Remove(path)
-				l.Debugln(w, "removing temporary:", path, info.ModTime())
+				slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "removing temporary:", path, info.ModTime())
 			}
 			return nil
 		}
 
 		if fs.IsInternal(path) {
-			l.Debugln(w, "ignored (internal):", path)
+			slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "ignored (internal):", path)
 			return skip
 		}
 
@@ -331,7 +332,7 @@ func (w *walker) walkAndHashFiles(ctx context.Context, toHashChan chan<- protoco
 		path = normalizePath(path)
 
 		if m := w.Matcher.Match(path); m.IsIgnored() {
-			l.Debugln(w, "ignored (patterns):", path)
+			slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "ignored (patterns):", path)
 			// Only descend if matcher says so and the current file is not a symlink.
 			if err != nil || m.CanSkipDir() || info.IsSymlink() {
 				return skip
@@ -438,7 +439,7 @@ func (w *walker) handleItem(ctx context.Context, path string, info fs.FileInfo, 
 
 	default:
 		// A special file, socket, fifo, etc. -- do nothing, just skip and continue scanning.
-		l.Debugf("Skipping non-regular file %s (%s)", path, info.Mode())
+		slogutil.Adapter(slogutil.Logger(w.Logger)).Debugf("Skipping non-regular file %s (%s)", path, info.Mode())
 		return nil
 	}
 }
@@ -469,7 +470,7 @@ func (w *walker) walkRegular(ctx context.Context, relPath string, info fs.FileIn
 	f = w.updateFileInfo(f, curFile)
 	f.NoPermissions = w.IgnorePerms
 	f.RawBlockSize = int32(blockSize)
-	l.Debugln(w, "checking:", f)
+	slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "checking:", f)
 
 	f.New = !hasCurFile
 
@@ -482,7 +483,7 @@ func (w *walker) walkRegular(ctx context.Context, relPath string, info fs.FileIn
 			IgnoreOwnership: !w.ScanOwnership,
 			IgnoreXattrs:    !w.ScanXattrs,
 		}) {
-			l.Debugln(w, "unchanged:", curFile)
+			slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "unchanged:", curFile)
 			return nil
 		}
 		if curFile.ShouldConflict() && !f.ShouldConflict() {
@@ -495,10 +496,10 @@ func (w *walker) walkRegular(ctx context.Context, relPath string, info fs.FileIn
 			// of the cluster, but e.g. a local change.
 			f.Version = f.Version.DropOthers(w.ShortID)
 		}
-		l.Debugln(w, "rescan:", curFile)
+		slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "rescan:", curFile)
 	}
 
-	l.Debugln(w, "to hash:", relPath, f)
+	slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "to hash:", relPath, f)
 
 	select {
 	case toHashChan <- f:
@@ -518,7 +519,7 @@ func (w *walker) walkDir(ctx context.Context, relPath string, info fs.FileInfo, 
 	}
 	f = w.updateFileInfo(f, curFile)
 	f.NoPermissions = w.IgnorePerms
-	l.Debugln(w, "checking:", f)
+	slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "checking:", f)
 
 	f.New = !hasCurFile
 
@@ -531,7 +532,7 @@ func (w *walker) walkDir(ctx context.Context, relPath string, info fs.FileInfo, 
 			IgnoreOwnership: !w.ScanOwnership,
 			IgnoreXattrs:    !w.ScanXattrs,
 		}) {
-			l.Debugln(w, "unchanged:", curFile)
+			slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "unchanged:", curFile)
 			return nil
 		}
 		if curFile.ShouldConflict() && !f.ShouldConflict() {
@@ -544,10 +545,10 @@ func (w *walker) walkDir(ctx context.Context, relPath string, info fs.FileInfo, 
 			// of the cluster, but e.g. a local change.
 			f.Version = f.Version.DropOthers(w.ShortID)
 		}
-		l.Debugln(w, "rescan:", curFile)
+		slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "rescan:", curFile)
 	}
 
-	l.Debugln(w, "dir:", relPath, f)
+	slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "dir:", relPath, f)
 
 	select {
 	case finishedChan <- ScanResult{File: f}:
@@ -572,7 +573,7 @@ func (w *walker) walkSymlink(ctx context.Context, relPath string, info fs.FileIn
 
 	curFile, hasCurFile := w.CurrentFiler.CurrentFile(relPath)
 	f = w.updateFileInfo(f, curFile)
-	l.Debugln(w, "checking:", f)
+	slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "checking:", f)
 
 	f.New = !hasCurFile
 
@@ -585,7 +586,7 @@ func (w *walker) walkSymlink(ctx context.Context, relPath string, info fs.FileIn
 			IgnoreOwnership: !w.ScanOwnership,
 			IgnoreXattrs:    !w.ScanXattrs,
 		}) {
-			l.Debugln(w, "unchanged:", curFile, info.ModTime().Unix(), info.Mode()&fs.ModePerm)
+			slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "unchanged:", curFile, info.ModTime().Unix(), info.Mode()&fs.ModePerm)
 			return nil
 		}
 		if curFile.ShouldConflict() && !f.ShouldConflict() {
@@ -598,10 +599,10 @@ func (w *walker) walkSymlink(ctx context.Context, relPath string, info fs.FileIn
 			// of the cluster, but e.g. a local change.
 			f.Version = f.Version.DropOthers(w.ShortID)
 		}
-		l.Debugln(w, "rescan:", curFile)
+		slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "rescan:", curFile)
 	}
 
-	l.Debugln(w, "symlink:", relPath, f)
+	slogutil.Adapter(slogutil.Logger(w.Logger)).Debugln(w, "symlink:", relPath, f)
 
 	select {
 	case finishedChan <- ScanResult{File: f}:
@@ -634,7 +635,7 @@ func (w *walker) applyNormalization(path, normPath string, info fs.FileInfo) (st
 		if err = w.Filesystem.Rename(path, normPath); err != nil {
 			return "", err
 		}
-		slog.Info("Normalized UTF8 encoding of file name", slogutil.FilePath(path))
+		slogutil.Logger(w.Logger).Info("Normalized UTF8 encoding of file name", slogutil.FilePath(path))
 		return normPath, nil
 	}
 	if w.Filesystem.SameFile(info, normInfo) {
@@ -652,7 +653,7 @@ func (w *walker) applyNormalization(path, normPath string, info fs.FileInfo) (st
 		if err = w.Filesystem.Rename(tempPath, normPath); err != nil {
 			// I don't ever expect this to happen, but if it does, we should probably tell our caller that the normalized
 			// path is the temp path: that way at least the user's data still gets synced.
-			slog.Error("Failed to rename while normalizating UTF8 encoding; please rename temp file manually", slog.String("from", tempPath), slog.String("to", normPath), slogutil.Error(err))
+			slogutil.Logger(w.Logger).Error("Failed to rename while normalizating UTF8 encoding; please rename temp file manually", slog.String("from", tempPath), slog.String("to", normPath), slogutil.Error(err))
 			return tempPath, nil
 		}
 		return normPath, nil
@@ -683,7 +684,7 @@ func (w *walker) updateFileInfo(dst, src protocol.FileInfo) protocol.FileInfo {
 }
 
 func handleError(ctx context.Context, context, path string, err error, finishedChan chan<- ScanResult) {
-	l.Debugf("handle error on '%v': %v: %v", path, context, err)
+	slogutil.Adapter(slogutil.Logger()).Debugf("handle error on '%v': %v: %v", path, context, err)
 	select {
 	case finishedChan <- ScanResult{
 		Err:  fmt.Errorf("%s: %w", context, err),

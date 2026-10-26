@@ -16,11 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syncthing/syncthing/lib/build"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/ignore/ignoreresult"
-	"github.com/syncthing/syncthing/lib/osutil"
-	"github.com/syncthing/syncthing/lib/rand"
+	"github.com/victorarias/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/ignore/ignoreresult"
+	"github.com/victorarias/syncthing/lib/osutil"
+	"github.com/victorarias/syncthing/lib/rand"
 )
 
 const escapePrefixEqual = escapePrefix + "="
@@ -953,7 +953,7 @@ func TestIssue4901(t *testing.T) {
 }
 
 // TestIssue5009 checks that ignored dirs are only skipped if there are no include patterns.
-// https://github.com/syncthing/syncthing/issues/5009 (rc-only bug)
+// https://github.com/victorarias/syncthing/issues/5009 (rc-only bug)
 func TestIssue5009(t *testing.T) {
 	testFs := newTestFS()
 

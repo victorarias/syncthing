@@ -10,7 +10,7 @@ import (
 	"bytes"
 	"io"
 
-	"github.com/syncthing/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/build"
 )
 
 type ReplacingWriter struct {

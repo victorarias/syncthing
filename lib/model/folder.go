@@ -18,22 +18,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/db"
-	"github.com/syncthing/syncthing/internal/itererr"
-	"github.com/syncthing/syncthing/internal/slogutil"
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/ignore"
-	"github.com/syncthing/syncthing/lib/osutil"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/scanner"
-	"github.com/syncthing/syncthing/lib/semaphore"
-	"github.com/syncthing/syncthing/lib/stats"
-	"github.com/syncthing/syncthing/lib/stringutil"
-	"github.com/syncthing/syncthing/lib/svcutil"
-	"github.com/syncthing/syncthing/lib/versioner"
-	"github.com/syncthing/syncthing/lib/watchaggregator"
+	"github.com/victorarias/syncthing/internal/db"
+	"github.com/victorarias/syncthing/internal/itererr"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/ignore"
+	"github.com/victorarias/syncthing/lib/osutil"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/scanner"
+	"github.com/victorarias/syncthing/lib/semaphore"
+	"github.com/victorarias/syncthing/lib/stats"
+	"github.com/victorarias/syncthing/lib/stringutil"
+	"github.com/victorarias/syncthing/lib/svcutil"
+	"github.com/victorarias/syncthing/lib/versioner"
+	"github.com/victorarias/syncthing/lib/watchaggregator"
 )
 
 // Arbitrary limit that triggers a warning on kqueue systems
@@ -102,7 +102,7 @@ type puller interface {
 
 func newFolder(model *model, ignores *ignore.Matcher, cfg config.FolderConfiguration, evLogger events.Logger, ioLimiter *semaphore.Semaphore, ver versioner.Versioner) *folder {
 	f := folder{
-		stateTracker:              newStateTracker(cfg.ID, evLogger),
+		stateTracker:              newStateTracker(cfg.ID, evLogger, model.sl),
 		FolderConfiguration:       cfg,
 		FolderStatisticsReference: stats.NewFolderStatisticsReference(db.NewTyped(model.sdb, "folderstats/"+cfg.ID)),
 		ioLimiter:                 ioLimiter,
@@ -114,7 +114,7 @@ func newFolder(model *model, ignores *ignore.Matcher, cfg config.FolderConfigura
 		mtimefs:       cfg.Filesystem(fs.NewMtimeOption(model.sdb, cfg.ID)),
 		modTimeWindow: cfg.ModTimeWindow(),
 		done:          make(chan struct{}),
-		sl:            slog.Default().With(cfg.LogAttr()),
+		sl:            slogutil.Logger(model.sl).With(cfg.LogAttr()),
 
 		scanInterval:           time.Duration(cfg.RescanIntervalS) * time.Second,
 		scanTimer:              time.NewTimer(0), // The first scan should be done immediately.
@@ -165,7 +165,7 @@ func (f *folder) Serve(ctx context.Context) error {
 		return err // will get restarted by suture
 	}
 
-	if f.FSWatcherEnabled && f.getHealthErrorAndLoadIgnores() == nil {
+	if f.FSWatcherEnabled && f.getHealthError() == nil {
 		f.startWatch(ctx)
 	}
 
@@ -359,19 +359,7 @@ func (f *folder) Reschedule() {
 	f.scanTimer.Reset(interval)
 }
 
-func (f *folder) getHealthErrorAndLoadIgnores() error {
-	if err := f.getHealthErrorWithoutIgnores(); err != nil {
-		return err
-	}
-	if f.Type != config.FolderTypeReceiveEncrypted {
-		if err := f.ignores.Load(".stignore"); err != nil && !fs.IsNotExist(err) {
-			return fmt.Errorf("loading ignores: %w", err)
-		}
-	}
-	return nil
-}
-
-func (f *folder) getHealthErrorWithoutIgnores() error {
+func (f *folder) getHealthError() error {
 	// Check for folder errors, with the most serious and specific first and
 	// generic ones like out of space on the home disk later.
 
@@ -406,7 +394,7 @@ func (f *folder) pull(ctx context.Context) (success bool, err error) {
 	// Abort early (before acquiring a limiter token) if there's a folder
 	// error. This must happen before the "nothing to do" check below so
 	// that up-to-date folders are also periodically health-checked.
-	err = f.getHealthErrorWithoutIgnores()
+	err = f.getHealthError()
 	if err != nil {
 		f.sl.DebugContext(ctx, "Skipping pull due to folder error", slogutil.Error(err))
 		return false, err
@@ -445,7 +433,7 @@ func (f *folder) pull(ctx context.Context) (success bool, err error) {
 			f.ignoresUpdated()
 		}
 	}()
-	err = f.getHealthErrorAndLoadIgnores()
+	err = f.getHealthError()
 	if err != nil {
 		f.sl.DebugContext(ctx, "Skipping pull due to folder error", slogutil.Error(err))
 		return false, err
@@ -471,7 +459,7 @@ func (f *folder) scanSubdirs(ctx context.Context, subDirs []string) error {
 
 	oldHash := f.ignores.Hash()
 
-	err := f.getHealthErrorAndLoadIgnores()
+	err := f.getHealthError()
 	if err != nil {
 		return err
 	}
@@ -585,7 +573,7 @@ func (f *folder) newScanBatch() *scanBatch {
 		skipInFindRename: make(map[string]struct{}),
 	}
 	b.updateBatch = NewFileInfoBatch(func(fs []protocol.FileInfo) error {
-		if err := b.f.getHealthErrorWithoutIgnores(); err != nil {
+		if err := b.f.getHealthError(); err != nil {
 			b.f.sl.Debug("Stopping scan due to folder error", slogutil.Error(err))
 			return err
 		}
@@ -671,6 +659,7 @@ func (f *folder) scanSubdirsChangedAndNew(ctx context.Context, subDirs []string,
 	defer scanCancel()
 
 	scanConfig := scanner.Config{
+		Logger:                f.sl,
 		Folder:                f.ID,
 		Subs:                  subDirs,
 		Matcher:               f.ignores,
@@ -1145,7 +1134,7 @@ func (f *folder) monitorWatch(ctx context.Context) {
 			var errOutside *fs.WatchEventOutsideRootError
 			if errors.As(err, &errOutside) {
 				if !warnedOutside {
-					slog.WarnContext(ctx, err.Error()) //nolint:sloglint
+					slogutil.Logger(f.sl).WarnContext(ctx, err.Error()) //nolint:sloglint
 					warnedOutside = true
 				}
 				f.evLogger.Log(events.Failure, "watching for changes encountered an event outside of the filesystem root")
@@ -1160,7 +1149,7 @@ func (f *folder) monitorWatch(ctx context.Context) {
 				f.warnedKqueue = true
 				summarySub.Unsubscribe()
 				summaryChan = nil
-				slog.WarnContext(ctx, "Filesystem watching (kqueue) is enabled with a lot of files/directories, which requires a lot of resources and might slow down your system significantly", f.LogAttr())
+				slogutil.Logger(f.sl).WarnContext(ctx, "Filesystem watching (kqueue) is enabled with a lot of files/directories, which requires a lot of resources and might slow down your system significantly", f.LogAttr())
 			}
 		case <-ctx.Done():
 			aggrCancel() // for good measure and keeping the linters happy
@@ -1446,7 +1435,7 @@ func unifySubs(dirs []string, exists func(dir string) bool) []string {
 	for i := 0; i < len(dirs); {
 		dir, err := fs.Canonicalize(dirs[i])
 		if err != nil {
-			slog.Debug("Skipping directory for scan", slog.String("dir", dirs[i]), slogutil.Error(err))
+			slogutil.Logger().Debug("Skipping directory for scan", slog.String("dir", dirs[i]), slogutil.Error(err))
 			dirs = append(dirs[:i], dirs[i+1:]...)
 			continue
 		}

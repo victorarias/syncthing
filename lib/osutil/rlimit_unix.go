@@ -11,7 +11,7 @@ package osutil
 import (
 	"syscall"
 
-	"github.com/syncthing/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/build"
 )
 
 const (

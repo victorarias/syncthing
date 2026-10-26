@@ -9,7 +9,6 @@ package fs
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -17,7 +16,8 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/v4/disk"
-	"github.com/syncthing/syncthing/lib/build"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/build"
 )
 
 const FilesystemTypeBasic FilesystemType = "basic"
@@ -33,7 +33,7 @@ type OptionJunctionsAsDirs struct{}
 
 func (*OptionJunctionsAsDirs) apply(fs Filesystem) Filesystem {
 	if basic, ok := fs.(*BasicFilesystem); !ok {
-		slog.Warn("WithJunctionsAsDirs must only be used with FilesystemTypeBasic")
+		slogutil.Logger().Warn("WithJunctionsAsDirs must only be used with FilesystemTypeBasic")
 	} else {
 		basic.junctionsAsDirs = true
 	}

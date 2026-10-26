@@ -1,122 +1,219 @@
+// Copyright (C) 2026 The attn Authors.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this file,
+// You can obtain one at https://mozilla.org/MPL/2.0/.
+
+// Package attnsync embeds the file synchronization engine. The caller owns
+// peer authentication, transport, the folder marker and configuration storage.
 package attnsync
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
+	"path/filepath"
+	"strings"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/db"
-	"github.com/syncthing/syncthing/internal/db/sqlite"
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/model"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/tlsutil"
 	"github.com/thejerf/suture/v4"
+	"github.com/victorarias/syncthing/internal/db/sqlite"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/ignore"
+	"github.com/victorarias/syncthing/lib/model"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/svcutil"
 )
 
+const Version = "v0.1.0"
+
 type Engine struct {
-	ID     protocol.DeviceID
-	cfg    config.Wrapper
-	model  model.Model
-	sdb    db.DB
-	keyGen *protocol.KeyGenerator
-	cert   tls.Certificate
-	sup    *suture.Supervisor
+	ID         protocol.DeviceID
+	cfg        config.Wrapper
+	model      model.Model
+	database   *sqlite.DB
+	keys       *protocol.KeyGenerator
+	events     events.Logger
+	logger     *slog.Logger
+	supervisor *suture.Supervisor
 }
 
-func New(cfg config.Wrapper, dbPath string, cert tls.Certificate, evLogger events.Logger) (*Engine, error) {
-	sdb, err := sqlite.Open(dbPath)
+// Configuration returns defaults for attn's externally managed transport.
+func Configuration(id protocol.DeviceID) config.Configuration {
+	cfg := config.New(id)
+	cfg.GUI.Enabled = false
+	o := &cfg.Options
+	o.SetLowPriority = false
+	o.URAccepted = -1
+	o.CREnabled = false
+	o.AutoUpgradeIntervalH = 0
+	o.GlobalAnnEnabled, o.LocalAnnEnabled, o.RelaysEnabled, o.NATEnabled = false, false, false, false
+	o.RawListenAddresses, o.RawStunServers = nil, nil
+	cfg.Defaults.Device.RawNumConnections = 1
+	f := &cfg.Defaults.Folder
+	f.MaxConflicts = -1
+	f.FSWatcherDelayS = 1
+	f.MarkerName = ".attn/notebook-sync"
+	f.IgnorePatterns = []string{"/.attn", ".*.tmp.*", ".seed-transfer-*", "(?d).DS_Store"}
+	return cfg
+}
+
+// New opens an index directory. Serve owns the engine and closes its database
+// when it returns. Each engine receives its own logger; nil discards logs.
+func New(indexPath string, cfg config.Configuration, id protocol.DeviceID, logger *slog.Logger) (*Engine, error) {
+	cfg = cfg.Copy()
+	if err := prepare(&cfg, id, logger); err != nil {
+		return nil, err
+	}
+	if !filepath.IsAbs(indexPath) {
+		return nil, fmt.Errorf("index path must be absolute: %q", indexPath)
+	}
+	logger = slogutil.Logger(logger)
+	database, err := sqlite.Open(indexPath, sqlite.WithLogger(logger))
 	if err != nil {
 		return nil, err
 	}
-	id := protocol.NewDeviceID(cert.Certificate[0])
-	keyGen := protocol.NewKeyGenerator()
-	m := model.NewModel(cfg, id, sdb, nil, evLogger, keyGen)
-	sup := suture.NewSimple("attnsync")
+	ev := events.NewLogger(logger)
+	wrapper := config.Wrap("", cfg, id, ev, logger)
+	keys := protocol.NewKeyGenerator()
+	m := model.NewModel(wrapper, id, database, nil, ev, keys, logger)
+	sup := suture.New("attnsync", svcutil.SpecWithInfoLogger(logger))
+	sup.Add(ev)
+	sup.Add(wrapper)
 	sup.Add(m)
-	return &Engine{ID: id, cfg: cfg, model: m, sdb: sdb, keyGen: keyGen, cert: cert, sup: sup}, nil
+	sup.Add(database.Service(8 * time.Hour))
+	return &Engine{ID: id, cfg: wrapper, model: m, database: database, keys: keys, events: ev, logger: logger, supervisor: sup}, nil
+}
+
+func prepare(cfg *config.Configuration, id protocol.DeviceID, logger *slog.Logger) error {
+	cfg.SetLogger(logger)
+	for i := range cfg.Folders {
+		f := &cfg.Folders[i]
+		if !filepath.IsAbs(f.Path) {
+			return fmt.Errorf("folder %s path must be absolute: %q", f.ID, f.Path)
+		}
+		if f.MarkerName == "" {
+			f.MarkerName = ".attn/notebook-sync"
+		}
+		if !filepath.IsLocal(f.MarkerName) || f.MarkerName == config.DefaultMarkerName {
+			return fmt.Errorf("folder %s marker must be a custom path under the folder: %q", f.ID, f.MarkerName)
+		}
+		if err := ignore.New(f.Filesystem()).ParseMemory(f.IgnorePatterns); err != nil {
+			return fmt.Errorf("folder %s ignores: %w", f.ID, err)
+		}
+	}
+	return cfg.Prepare(id)
 }
 
 func (e *Engine) Serve(ctx context.Context) error {
-	err := e.sup.Serve(ctx)
-	e.sdb.Close()
-	return err
+	defer e.database.Close()
+	return e.supervisor.Serve(ctx)
 }
 
-func (e *Engine) SetIgnores(folder string, lines []string) error {
-	return e.model.SetIgnores(folder, lines)
-}
+func (e *Engine) Ready() <-chan struct{} { return e.model.Started() }
 
-func (e *Engine) ServeConn(ctx context.Context, raw net.Conn, dialer bool) error {
-	tc := tlsutil.SecureDefaultTLS13()
-	tc.Certificates = []tls.Certificate{e.cert}
-	tc.NextProtos = []string{"bep/1.0"}
-	tc.ClientAuth = tls.RequireAnyClientCert
-	tc.SessionTicketsDisabled = true
-	tc.InsecureSkipVerify = true
-	var c *tls.Conn
-	if dialer {
-		c = tls.Client(raw, tc)
-	} else {
-		c = tls.Server(raw, tc)
-	}
-	_ = c.SetDeadline(time.Now().Add(20 * time.Second))
-	if err := c.HandshakeContext(ctx); err != nil {
-		raw.Close()
+// Configure replaces the in-memory configuration and waits for application.
+func (e *Engine) Configure(cfg config.Configuration) error {
+	cfg = cfg.Copy()
+	if err := prepare(&cfg, e.ID, e.logger); err != nil {
 		return err
 	}
-	certs := c.ConnectionState().PeerCertificates
-	if len(certs) != 1 {
-		c.Close()
-		return fmt.Errorf("peer presented %d certificates, want 1", len(certs))
+	waiter, err := e.cfg.Modify(func(current *config.Configuration) { *current = cfg })
+	if err != nil {
+		return err
 	}
-	remoteID := protocol.NewDeviceID(certs[0].Raw)
-	devCfg, ok := e.cfg.Device(remoteID)
-	if !ok || remoteID == e.ID {
-		c.Close()
-		return fmt.Errorf("unknown peer %s", remoteID.Short())
+	waiter.Wait()
+	return nil
+}
+
+func (e *Engine) Subscribe(mask events.EventType) events.Subscription {
+	return e.events.Subscribe(mask)
+}
+
+type FolderState struct {
+	State     string
+	Changed   time.Time
+	NeedFiles int
+	NeedBytes int64
+	Error     error
+}
+
+func (e *Engine) FolderState(folder string) (FolderState, error) {
+	state, changed, health := e.model.State(folder)
+	need, err := e.model.NeedSize(folder, protocol.LocalDeviceID)
+	if err != nil {
+		return FolderState{}, err
 	}
-	hello := protocol.Hello{ClientName: "attn", ClientVersion: "v2.1.6", Timestamp: time.Now().UnixNano(), NumConnections: 1}
+	return FolderState{State: state, Changed: changed, NeedFiles: need.Files, NeedBytes: need.Bytes, Error: health}, nil
+}
+
+func (e *Engine) Completion(peer protocol.DeviceID, folder string) (model.FolderCompletion, error) {
+	return e.model.Completion(peer, folder)
+}
+
+// ServeConn takes ownership of an authenticated byte stream. It adds no TLS,
+// listener, dialer, retry or certificate exchange. Cancellation closes the stream,
+// including while the peer has not completed the protocol hello.
+func (e *Engine) ServeConn(ctx context.Context, conn net.Conn, peer protocol.DeviceID) error {
+	defer conn.Close()
+	device, ok := e.cfg.Device(peer)
+	if !ok || peer == e.ID {
+		return fmt.Errorf("unknown peer %s", peer)
+	}
+	if device.Paused {
+		return fmt.Errorf("peer %s is paused", peer)
+	}
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer stop()
+	select {
+	case <-e.Ready():
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	hello := protocol.Hello{ClientName: "attn", ClientVersion: Version, Timestamp: time.Now().UnixNano(), NumConnections: 1}
 	if me, ok := e.cfg.Device(e.ID); ok {
 		hello.DeviceName = me.Name
 	}
-	theirs, err := protocol.ExchangeHello(c, hello)
+	theirs, err := protocol.ExchangeHello(conn, hello)
 	if err != nil {
-		c.Close()
 		return err
 	}
-	_ = c.SetDeadline(time.Time{})
-	if err := e.model.OnHello(remoteID, raw.RemoteAddr(), theirs); err != nil {
-		c.Close()
+	if err := e.model.OnHello(peer, conn.RemoteAddr(), theirs); err != nil {
 		return err
 	}
-	info := connInfo{Conn: c, id: fmt.Sprintf("%x-%x", hello.Timestamp, theirs.Timestamp), at: time.Now()}
-	pc := protocol.NewConnection(remoteID, c, c, c, e.model, info, devCfg.Compression.ToProtocol(), e.keyGen)
-	e.model.AddConnection(pc, theirs)
+	info := connectionInfo{Conn: conn, id: fmt.Sprintf("%x-%x", hello.Timestamp, theirs.Timestamp), at: time.Now()}
+	pc := protocol.NewConnection(peer, conn, conn, conn, e.model, info, device.Compression.ToProtocol(), e.keys, e.logger)
+	closed := e.model.AddConnection(pc, theirs)
+	defer func() { <-closed }()
 	select {
 	case <-pc.Closed():
 		return errors.New("connection closed")
 	case <-ctx.Done():
+		conn.Close()
 		pc.Close(ctx.Err())
+		<-pc.Closed()
 		return ctx.Err()
 	}
 }
 
-type connInfo struct {
-	*tls.Conn
+type connectionInfo struct {
+	net.Conn
 	id string
 	at time.Time
 }
 
-func (c connInfo) Type() string             { return "attn-link" }
-func (c connInfo) Transport() string        { return "attn-link" }
-func (c connInfo) IsLocal() bool            { return false }
-func (c connInfo) Priority() int            { return 0 }
-func (c connInfo) String() string           { return "attn-link " + c.RemoteAddr().String() }
-func (c connInfo) Crypto() string           { return "TLS1.3" }
-func (c connInfo) EstablishedAt() time.Time { return c.at }
-func (c connInfo) ConnectionID() string     { return c.id }
+func (c connectionInfo) Type() string             { return "attn-bridge" }
+func (c connectionInfo) Transport() string        { return "attn-bridge" }
+func (c connectionInfo) IsLocal() bool            { return false }
+func (c connectionInfo) Priority() int            { return 0 }
+func (c connectionInfo) String() string           { return "attn-bridge " + c.RemoteAddr().String() }
+func (c connectionInfo) Crypto() string           { return "authenticated by caller" }
+func (c connectionInfo) EstablishedAt() time.Time { return c.at }
+func (c connectionInfo) ConnectionID() string     { return c.id }
+
+// IsConflict reports whether a file name is a Syncthing conflict copy.
+func IsConflict(path string) bool { return strings.Contains(filepath.Base(path), ".sync-conflict-") }

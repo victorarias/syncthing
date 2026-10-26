@@ -46,10 +46,16 @@ type adapter struct {
 }
 
 func (a adapter) Debugln(vals ...any) {
+	if !a.l.Enabled(context.Background(), slog.LevelDebug) {
+		return
+	}
 	a.log(strings.TrimSpace(fmt.Sprintln(vals...)), slog.LevelDebug)
 }
 
 func (a adapter) Debugf(format string, vals ...any) {
+	if !a.l.Enabled(context.Background(), slog.LevelDebug) {
+		return
+	}
 	a.log(fmt.Sprintf(format, vals...), slog.LevelDebug)
 }
 
@@ -67,5 +73,7 @@ func (a adapter) log(msg string, level slog.Level) {
 }
 
 func (a adapter) ShouldDebug(facility string) bool {
-	return globalLevels.Get(facility) <= slog.LevelDebug
+	return a.l.Enabled(context.Background(), slog.LevelDebug)
 }
+
+func Adapter(logger *slog.Logger) *adapter { return &adapter{Logger(logger)} }

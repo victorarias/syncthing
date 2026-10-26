@@ -8,20 +8,26 @@ import (
 	"sync"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/db"
-	"github.com/syncthing/syncthing/lib/model"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/stats"
-	"github.com/syncthing/syncthing/lib/ur/contract"
-	"github.com/syncthing/syncthing/lib/versioner"
+	"github.com/victorarias/syncthing/internal/db"
+	"github.com/victorarias/syncthing/lib/model"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/stats"
+	"github.com/victorarias/syncthing/lib/ur/contract"
+	"github.com/victorarias/syncthing/lib/versioner"
 )
 
 type Model struct {
-	AddConnectionStub        func(protocol.Connection, protocol.Hello)
+	AddConnectionStub        func(protocol.Connection, protocol.Hello) <-chan struct{}
 	addConnectionMutex       sync.RWMutex
 	addConnectionArgsForCall []struct {
 		arg1 protocol.Connection
 		arg2 protocol.Hello
+	}
+	addConnectionReturns struct {
+		result1 <-chan struct{}
+	}
+	addConnectionReturnsOnCall map[int]struct {
+		result1 <-chan struct{}
 	}
 	AllGlobalFilesStub        func(string) (iter.Seq[db.FileMetadata], func() error)
 	allGlobalFilesMutex       sync.RWMutex
@@ -100,15 +106,15 @@ type Model struct {
 	connectedToReturnsOnCall map[int]struct {
 		result1 bool
 	}
-	ConnectionStatsStub        func() map[string]interface{}
+	ConnectionStatsStub        func() map[string]any
 	connectionStatsMutex       sync.RWMutex
 	connectionStatsArgsForCall []struct {
 	}
 	connectionStatsReturns struct {
-		result1 map[string]interface{}
+		result1 map[string]any
 	}
 	connectionStatsReturnsOnCall map[int]struct {
-		result1 map[string]interface{}
+		result1 map[string]any
 	}
 	CurrentFolderFileStub        func(string, string) (protocol.FileInfo, bool, error)
 	currentFolderFileMutex       sync.RWMutex
@@ -638,6 +644,16 @@ type Model struct {
 	setIgnoresReturnsOnCall map[int]struct {
 		result1 error
 	}
+	StartedStub        func() <-chan struct{}
+	startedMutex       sync.RWMutex
+	startedArgsForCall []struct {
+	}
+	startedReturns struct {
+		result1 <-chan struct{}
+	}
+	startedReturnsOnCall map[int]struct {
+		result1 <-chan struct{}
+	}
 	StateStub        func(string) (string, time.Time, error)
 	stateMutex       sync.RWMutex
 	stateArgsForCall []struct {
@@ -675,18 +691,24 @@ type Model struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *Model) AddConnection(arg1 protocol.Connection, arg2 protocol.Hello) {
+func (fake *Model) AddConnection(arg1 protocol.Connection, arg2 protocol.Hello) <-chan struct{} {
 	fake.addConnectionMutex.Lock()
+	ret, specificReturn := fake.addConnectionReturnsOnCall[len(fake.addConnectionArgsForCall)]
 	fake.addConnectionArgsForCall = append(fake.addConnectionArgsForCall, struct {
 		arg1 protocol.Connection
 		arg2 protocol.Hello
 	}{arg1, arg2})
 	stub := fake.AddConnectionStub
+	fakeReturns := fake.addConnectionReturns
 	fake.recordInvocation("AddConnection", []interface{}{arg1, arg2})
 	fake.addConnectionMutex.Unlock()
 	if stub != nil {
-		fake.AddConnectionStub(arg1, arg2)
+		return stub(arg1, arg2)
 	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
 }
 
 func (fake *Model) AddConnectionCallCount() int {
@@ -695,7 +717,7 @@ func (fake *Model) AddConnectionCallCount() int {
 	return len(fake.addConnectionArgsForCall)
 }
 
-func (fake *Model) AddConnectionCalls(stub func(protocol.Connection, protocol.Hello)) {
+func (fake *Model) AddConnectionCalls(stub func(protocol.Connection, protocol.Hello) <-chan struct{}) {
 	fake.addConnectionMutex.Lock()
 	defer fake.addConnectionMutex.Unlock()
 	fake.AddConnectionStub = stub
@@ -706,6 +728,29 @@ func (fake *Model) AddConnectionArgsForCall(i int) (protocol.Connection, protoco
 	defer fake.addConnectionMutex.RUnlock()
 	argsForCall := fake.addConnectionArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *Model) AddConnectionReturns(result1 <-chan struct{}) {
+	fake.addConnectionMutex.Lock()
+	defer fake.addConnectionMutex.Unlock()
+	fake.AddConnectionStub = nil
+	fake.addConnectionReturns = struct {
+		result1 <-chan struct{}
+	}{result1}
+}
+
+func (fake *Model) AddConnectionReturnsOnCall(i int, result1 <-chan struct{}) {
+	fake.addConnectionMutex.Lock()
+	defer fake.addConnectionMutex.Unlock()
+	fake.AddConnectionStub = nil
+	if fake.addConnectionReturnsOnCall == nil {
+		fake.addConnectionReturnsOnCall = make(map[int]struct {
+			result1 <-chan struct{}
+		})
+	}
+	fake.addConnectionReturnsOnCall[i] = struct {
+		result1 <-chan struct{}
+	}{result1}
 }
 
 func (fake *Model) AllGlobalFiles(arg1 string) (iter.Seq[db.FileMetadata], func() error) {
@@ -1092,7 +1137,7 @@ func (fake *Model) ConnectedToReturnsOnCall(i int, result1 bool) {
 	}{result1}
 }
 
-func (fake *Model) ConnectionStats() map[string]interface{} {
+func (fake *Model) ConnectionStats() map[string]any {
 	fake.connectionStatsMutex.Lock()
 	ret, specificReturn := fake.connectionStatsReturnsOnCall[len(fake.connectionStatsArgsForCall)]
 	fake.connectionStatsArgsForCall = append(fake.connectionStatsArgsForCall, struct {
@@ -1116,32 +1161,32 @@ func (fake *Model) ConnectionStatsCallCount() int {
 	return len(fake.connectionStatsArgsForCall)
 }
 
-func (fake *Model) ConnectionStatsCalls(stub func() map[string]interface{}) {
+func (fake *Model) ConnectionStatsCalls(stub func() map[string]any) {
 	fake.connectionStatsMutex.Lock()
 	defer fake.connectionStatsMutex.Unlock()
 	fake.ConnectionStatsStub = stub
 }
 
-func (fake *Model) ConnectionStatsReturns(result1 map[string]interface{}) {
+func (fake *Model) ConnectionStatsReturns(result1 map[string]any) {
 	fake.connectionStatsMutex.Lock()
 	defer fake.connectionStatsMutex.Unlock()
 	fake.ConnectionStatsStub = nil
 	fake.connectionStatsReturns = struct {
-		result1 map[string]interface{}
+		result1 map[string]any
 	}{result1}
 }
 
-func (fake *Model) ConnectionStatsReturnsOnCall(i int, result1 map[string]interface{}) {
+func (fake *Model) ConnectionStatsReturnsOnCall(i int, result1 map[string]any) {
 	fake.connectionStatsMutex.Lock()
 	defer fake.connectionStatsMutex.Unlock()
 	fake.ConnectionStatsStub = nil
 	if fake.connectionStatsReturnsOnCall == nil {
 		fake.connectionStatsReturnsOnCall = make(map[int]struct {
-			result1 map[string]interface{}
+			result1 map[string]any
 		})
 	}
 	fake.connectionStatsReturnsOnCall[i] = struct {
-		result1 map[string]interface{}
+		result1 map[string]any
 	}{result1}
 }
 
@@ -3669,6 +3714,59 @@ func (fake *Model) SetIgnoresReturnsOnCall(i int, result1 error) {
 	}
 	fake.setIgnoresReturnsOnCall[i] = struct {
 		result1 error
+	}{result1}
+}
+
+func (fake *Model) Started() <-chan struct{} {
+	fake.startedMutex.Lock()
+	ret, specificReturn := fake.startedReturnsOnCall[len(fake.startedArgsForCall)]
+	fake.startedArgsForCall = append(fake.startedArgsForCall, struct {
+	}{})
+	stub := fake.StartedStub
+	fakeReturns := fake.startedReturns
+	fake.recordInvocation("Started", []interface{}{})
+	fake.startedMutex.Unlock()
+	if stub != nil {
+		return stub()
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *Model) StartedCallCount() int {
+	fake.startedMutex.RLock()
+	defer fake.startedMutex.RUnlock()
+	return len(fake.startedArgsForCall)
+}
+
+func (fake *Model) StartedCalls(stub func() <-chan struct{}) {
+	fake.startedMutex.Lock()
+	defer fake.startedMutex.Unlock()
+	fake.StartedStub = stub
+}
+
+func (fake *Model) StartedReturns(result1 <-chan struct{}) {
+	fake.startedMutex.Lock()
+	defer fake.startedMutex.Unlock()
+	fake.StartedStub = nil
+	fake.startedReturns = struct {
+		result1 <-chan struct{}
+	}{result1}
+}
+
+func (fake *Model) StartedReturnsOnCall(i int, result1 <-chan struct{}) {
+	fake.startedMutex.Lock()
+	defer fake.startedMutex.Unlock()
+	fake.StartedStub = nil
+	if fake.startedReturnsOnCall == nil {
+		fake.startedReturnsOnCall = make(map[int]struct {
+			result1 <-chan struct{}
+		})
+	}
+	fake.startedReturnsOnCall[i] = struct {
+		result1 <-chan struct{}
 	}{result1}
 }
 

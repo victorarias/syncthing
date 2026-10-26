@@ -9,10 +9,19 @@
 package sqlite
 
 import (
-	_ "github.com/mattn/go-sqlite3" // register sqlite3 database driver
+	"database/sql"
+
+	"github.com/mattn/go-sqlite3" // register sqlite3 database driver
 )
 
 const (
-	dbDriver      = "sqlite3"
+	dbDriver      = "attnsync-sqlite3"
 	commonOptions = "_fk=true&_rt=true&_sync=1&_txlock=immediate"
 )
+
+func init() {
+	sql.Register(dbDriver, &sqlite3.SQLiteDriver{ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+		_, err := conn.Exec("PRAGMA temp_store=MEMORY", nil)
+		return err
+	}})
+}

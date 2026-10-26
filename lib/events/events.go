@@ -14,12 +14,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"runtime"
 	"sync"
 	"time"
 
-	"github.com/syncthing/syncthing/lib/syncutil"
 	"github.com/thejerf/suture/v4"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/syncutil"
 )
 
 type EventType int64
@@ -240,6 +242,7 @@ type Logger interface {
 }
 
 type logger struct {
+	sl                  *slog.Logger
 	subs                []*subscription
 	nextSubscriptionIDs []int
 	nextGlobalID        int
@@ -267,6 +270,7 @@ type Subscription interface {
 }
 
 type subscription struct {
+	sl            *slog.Logger
 	mask          EventType
 	events        chan Event
 	toUnsubscribe chan *subscription
@@ -279,8 +283,9 @@ var (
 	ErrClosed  = errors.New("closed")
 )
 
-func NewLogger() Logger {
+func NewLogger(loggers ...*slog.Logger) Logger {
 	l := &logger{
+		sl:            slogutil.Logger(loggers...),
 		timeout:       time.NewTimer(time.Second),
 		events:        make(chan Event, BufferSize),
 		funcs:         make(chan func(context.Context)),
@@ -336,7 +341,7 @@ func (l *logger) Log(t EventType, data any) {
 
 func (l *logger) sendEvent(e Event) {
 	l.nextGlobalID++
-	dl.Debugln("log", l.nextGlobalID, e.Type, e.Data)
+	slogutil.Adapter(l.sl).Debugln("log", l.nextGlobalID, e.Type, e.Data)
 
 	e.GlobalID = l.nextGlobalID
 
@@ -370,9 +375,10 @@ func (l *logger) sendEvent(e Event) {
 func (l *logger) Subscribe(mask EventType) Subscription {
 	res := make(chan Subscription)
 	l.funcs <- func(ctx context.Context) {
-		dl.Debugln("subscribe", mask)
+		slogutil.Adapter(l.sl).Debugln("subscribe", mask)
 
 		s := &subscription{
+			sl:            l.sl,
 			mask:          mask,
 			events:        make(chan Event, BufferSize),
 			toUnsubscribe: l.toUnsubscribe,
@@ -402,7 +408,7 @@ func (l *logger) Subscribe(mask EventType) Subscription {
 }
 
 func (l *logger) unsubscribe(s *subscription) {
-	dl.Debugln("unsubscribe", s.mask)
+	slogutil.Adapter(l.sl).Debugln("unsubscribe", s.mask)
 	for i, ss := range l.subs {
 		if s == ss {
 			last := len(l.subs) - 1
@@ -429,7 +435,7 @@ func (l *logger) String() string {
 // out of the event channel is closed. Poll should not be called concurrently
 // from multiple goroutines for a single subscription.
 func (s *subscription) Poll(timeout time.Duration) (Event, error) {
-	dl.Debugln("poll", timeout)
+	slogutil.Adapter(s.sl).Debugln("poll", timeout)
 
 	s.timeout.Reset(timeout)
 

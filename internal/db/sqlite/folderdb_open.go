@@ -8,9 +8,10 @@ package sqlite
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/protocol"
 )
 
 type folderDB struct {
@@ -23,6 +24,10 @@ type folderDB struct {
 }
 
 func openFolderDB(folder, path string, deleteRetention time.Duration) (*folderDB, error) {
+	return openFolderDBWithLogger(folder, path, deleteRetention, nil)
+}
+
+func openFolderDBWithLogger(folder, path string, deleteRetention time.Duration, logger *slog.Logger) (*folderDB, error) {
 	pragmas := []string{
 		"journal_mode = WAL",
 		"optimize = 0x10002",
@@ -38,7 +43,7 @@ func openFolderDB(folder, path string, deleteRetention time.Duration) (*folderDB
 		"sql/migrations/folder/*",
 	}
 
-	base, err := openBase(path, maxOpenConns, maxIdleConns, pragmas, schemas, migrations)
+	base, err := openBase(path, maxOpenConns, maxIdleConns, pragmas, schemas, migrations, logger)
 	if err != nil {
 		return nil, err
 	}

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/gen/bep"
+	"github.com/victorarias/syncthing/internal/gen/bep"
 )
 
 // The Vector type represents a version vector. The zero value is a usable

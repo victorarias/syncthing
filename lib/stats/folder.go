@@ -9,7 +9,7 @@ package stats
 import (
 	"time"
 
-	"github.com/syncthing/syncthing/internal/db"
+	"github.com/victorarias/syncthing/internal/db"
 )
 
 type FolderStatistics struct {

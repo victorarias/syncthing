@@ -11,12 +11,14 @@ import (
 	"log/slog"
 	"slices"
 
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/protocol"
 )
 
 const defaultNumConnections = 3 // number of connections to use by default
 
 type DeviceConfiguration struct {
+	sl                       *slog.Logger
 	DeviceID                 protocol.DeviceID `json:"deviceID" xml:"id,attr" nodefault:"true"`
 	Name                     string            `json:"name" xml:"name,attr,omitempty"`
 	Addresses                []string          `json:"addresses" xml:"address,omitempty"`
@@ -67,11 +69,11 @@ func (cfg *DeviceConfiguration) prepare(sharedFolders []string) {
 	// auto accept folders.
 	if cfg.Untrusted {
 		if cfg.Introducer {
-			slog.Warn("Device is both untrusted and an introducer, removing introducer flag", cfg.DeviceID.LogAttr())
+			cfg.Logger().Warn("Device is both untrusted and an introducer, removing introducer flag", cfg.DeviceID.LogAttr())
 			cfg.Introducer = false
 		}
 		if cfg.AutoAcceptFolders {
-			slog.Warn("Device is both untrusted and auto-accepting folders, removing auto-accept flag", cfg.DeviceID.LogAttr())
+			cfg.Logger().Warn("Device is both untrusted and auto-accepting folders, removing auto-accept flag", cfg.DeviceID.LogAttr())
 			cfg.AutoAcceptFolders = false
 		}
 	}
@@ -125,3 +127,5 @@ func (cfg *DeviceConfiguration) Description() string {
 	}
 	return fmt.Sprintf("%s (%s)", cfg.Name, cfg.DeviceID.Short())
 }
+
+func (cfg DeviceConfiguration) Logger() *slog.Logger { return slogutil.Logger(cfg.sl) }

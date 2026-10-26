@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/slogutil"
 	"github.com/thejerf/suture/v4"
+	"github.com/victorarias/syncthing/internal/slogutil"
 )
 
 const ServiceTimeout = 10 * time.Second
@@ -159,12 +159,12 @@ func OnSupervisorDone(sup *suture.Supervisor, fn func()) {
 	sup.Add(doneService(fn))
 }
 
-func SpecWithDebugLogger() suture.Spec {
-	return spec(func(e suture.Event) { slog.Debug(e.String()) })
+func SpecWithDebugLogger(loggers ...*slog.Logger) suture.Spec {
+	return spec(func(e suture.Event) { slogutil.Logger().Debug(e.String()) })
 }
 
-func SpecWithInfoLogger() suture.Spec {
-	return spec(infoEventHook())
+func SpecWithInfoLogger(loggers ...*slog.Logger) suture.Spec {
+	return spec(infoEventHook(loggers...))
 }
 
 func spec(eventHook suture.EventHook) suture.Spec {
@@ -179,11 +179,11 @@ func spec(eventHook suture.EventHook) suture.Spec {
 // infoEventHook prints service failures and failures to stop services at level
 // info. All other events and identical, consecutive failures are logged at
 // debug only.
-func infoEventHook() suture.EventHook {
+func infoEventHook(loggers ...*slog.Logger) suture.EventHook {
 	var prevTerminate suture.EventServiceTerminate
 	return func(ei suture.Event) {
 		m := ei.Map()
-		l := slog.Default().With("supervisor", m["supervisor_name"], "service", m["service_name"])
+		l := slogutil.Logger(loggers...).With("supervisor", m["supervisor_name"], "service", m["service_name"])
 		switch e := ei.(type) {
 		case suture.EventStopTimeout:
 			l.Warn("Service failed to terminate in a timely manner")

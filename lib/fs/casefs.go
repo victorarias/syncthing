@@ -15,6 +15,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/victorarias/syncthing/internal/slogutil"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -91,12 +92,12 @@ func (r *caseFilesystemRegistry) get(fs Filesystem) Filesystem {
 			r.startCleaner.Do(func() {
 				go r.cleaner()
 			})
-			l.Debugf("Created new case cache for key %v", k)
+			slogutil.Adapter(slogutil.Logger()).Debugf("Created new case cache for key %v", k)
 		}
 		r.mut.Unlock()
 	}
 	if ok {
-		l.Debugf("Reusing case cache for key %v", k)
+		slogutil.Adapter(slogutil.Logger()).Debugf("Reusing case cache for key %v", k)
 	}
 
 	return &caseFilesystem{

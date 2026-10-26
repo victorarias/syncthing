@@ -24,8 +24,8 @@ import (
 	"golang.org/x/crypto/scrypt"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/syncthing/syncthing/internal/gen/bep"
-	"github.com/syncthing/syncthing/lib/rand"
+	"github.com/victorarias/syncthing/internal/gen/bep"
+	"github.com/victorarias/syncthing/lib/rand"
 )
 
 const (

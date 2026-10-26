@@ -11,7 +11,8 @@ import (
 	"os/user"
 	"strings"
 
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/protocol"
 )
 
 func (f *sendReceiveFolder) syncOwnership(file *protocol.FileInfo, path string) error {
@@ -20,13 +21,13 @@ func (f *sendReceiveFolder) syncOwnership(file *protocol.FileInfo, path string) 
 		return nil
 	}
 
-	l.Debugf("Owner name for %s is %s (group=%v)", path, file.Platform.Windows.OwnerName, file.Platform.Windows.OwnerIsGroup)
+	slogutil.Adapter(f.sl).Debugf("Owner name for %s is %s (group=%v)", path, file.Platform.Windows.OwnerName, file.Platform.Windows.OwnerIsGroup)
 	usid, gsid, err := lookupUserAndGroup(file.Platform.Windows.OwnerName, file.Platform.Windows.OwnerIsGroup)
 	if err != nil {
 		return err
 	}
 
-	l.Debugf("Owner for %s resolved to uid=%q gid=%q", path, usid, gsid)
+	slogutil.Adapter(f.sl).Debugf("Owner for %s resolved to uid=%q gid=%q", path, usid, gsid)
 	return f.mtimefs.Lchown(path, usid, gsid)
 }
 

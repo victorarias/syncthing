@@ -13,8 +13,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/syncthing/syncthing/lib/dialer"
-	"github.com/syncthing/syncthing/lib/testutil"
+	"github.com/victorarias/syncthing/lib/testutil"
 )
 
 func BenchmarkRequestsRawTCP(b *testing.B) {
@@ -138,8 +137,6 @@ func getTCPConnectionPair() (net.Conn, net.Conn, error) {
 	}
 
 	// Set the buffer sizes etc as usual
-	dialer.SetTCPOptions(conn0)
-	dialer.SetTCPOptions(conn1)
 
 	return conn0, conn1, nil
 }

@@ -276,7 +276,7 @@ func (f *BasicFilesystem) watchPaths(name string) (string, []string, error) {
 	}
 
 	// Remove `\\?\` prefix if the path is just a drive letter as a dirty
-	// fix for https://github.com/syncthing/syncthing/issues/5578
+	// fix for https://github.com/victorarias/syncthing/issues/5578
 	if filepath.Clean(name) == "." && len(root) <= 7 && len(root) > 4 && root[:4] == `\\?\` {
 		root = root[4:]
 	}

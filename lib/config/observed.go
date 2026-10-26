@@ -9,7 +9,7 @@ package config
 import (
 	"time"
 
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/protocol"
 )
 
 type ObservedFolder struct {

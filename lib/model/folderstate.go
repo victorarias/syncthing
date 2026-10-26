@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/slogutil"
-	"github.com/syncthing/syncthing/lib/events"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/events"
 )
 
 type folderState int
@@ -86,6 +86,7 @@ func (s remoteFolderState) MarshalText() ([]byte, error) {
 }
 
 type stateTracker struct {
+	sl       *slog.Logger
 	folderID string
 	evLogger events.Logger
 
@@ -95,8 +96,9 @@ type stateTracker struct {
 	changed time.Time
 }
 
-func newStateTracker(id string, evLogger events.Logger) stateTracker {
+func newStateTracker(id string, evLogger events.Logger, loggers ...*slog.Logger) stateTracker {
 	return stateTracker{
+		sl:       slogutil.Logger(loggers...),
 		folderID: id,
 		evLogger: evLogger,
 	}
@@ -129,7 +131,7 @@ func (s *stateTracker) setState(newState folderState) {
 		eventData["duration"] = time.Since(s.changed).Seconds()
 	}
 
-	slog.Debug("Folder changed state", "folder", s.folderID, "state", newState, "from", s.current)
+	slogutil.Logger(s.sl).Debug("Folder changed state", "folder", s.folderID, "state", newState, "from", s.current)
 
 	s.current = newState
 	s.changed = time.Now().Truncate(time.Second)
@@ -162,9 +164,9 @@ func (s *stateTracker) setError(err error) {
 	}
 
 	if err != nil && s.current != FolderError {
-		slog.Warn("Folder is in error state", slog.String("folder", s.folderID), slogutil.Error(err))
+		slogutil.Logger(s.sl).Warn("Folder is in error state", slog.String("folder", s.folderID), slogutil.Error(err))
 	} else if err == nil && s.current == FolderError {
-		slog.Info("Folder error state was cleared", slog.String("folder", s.folderID))
+		slogutil.Logger(s.sl).Info("Folder error state was cleared", slog.String("folder", s.folderID))
 	}
 
 	if err != nil {

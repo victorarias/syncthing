@@ -10,7 +10,7 @@ import (
 	"iter"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/syncthing/syncthing/internal/db"
+	"github.com/victorarias/syncthing/internal/db"
 )
 
 func (s *baseDB) GetKV(key string) ([]byte, error) {

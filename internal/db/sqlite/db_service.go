@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/syncthing/syncthing/internal/db"
-	"github.com/syncthing/syncthing/internal/slogutil"
-	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/internal/db"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/protocol"
 )
 
 const (
@@ -74,7 +74,7 @@ func (s *Service) Serve(ctx context.Context) error {
 	if wait < 0 {
 		wait = time.Minute
 	}
-	slog.DebugContext(ctx, "Next periodic run due", "after", wait)
+	slogutil.Logger(s.sdb.sl).DebugContext(ctx, "Next periodic run due", "after", wait)
 	timer := time.NewTimer(wait)
 
 	if s.maintenanceInterval == 0 {
@@ -101,7 +101,7 @@ func (s *Service) Serve(ctx context.Context) error {
 
 		if s.maintenanceInterval != 0 {
 			timer.Reset(s.maintenanceInterval)
-			slog.DebugContext(ctx, "Next periodic run due", "after", s.maintenanceInterval)
+			slogutil.Logger(s.sdb.sl).DebugContext(ctx, "Next periodic run due", "after", s.maintenanceInterval)
 		}
 
 		_ = s.internalMeta.PutTime(lastMaintKey, time.Now())
@@ -115,10 +115,12 @@ func (s *Service) LastMaintenanceTime() time.Time {
 
 func (s *Service) periodic(ctx context.Context) error {
 	t0 := time.Now()
-	slog.DebugContext(ctx, "Periodic start")
+	slogutil.Logger(s.sdb.sl).DebugContext(ctx, "Periodic start")
 
 	t1 := time.Now()
-	defer func() { slog.DebugContext(ctx, "Periodic done in", "t1", time.Since(t1), "t0t1", t1.Sub(t0)) }()
+	defer func() {
+		slogutil.Logger(s.sdb.sl).DebugContext(ctx, "Periodic done in", "t1", time.Since(t1), "t0t1", t1.Sub(t0))
+	}()
 
 	s.sdb.updateLock.Lock()
 	err := tidy(ctx, s.sdb.sql)
@@ -140,7 +142,7 @@ func (s *Service) periodic(ctx context.Context) error {
 		if prev, _, err := meta.Int64(lastSuccessfulGCSeqKey); err != nil {
 			return wrap(err)
 		} else if seq == prev {
-			slog.DebugContext(ctx, "Skipping unnecessary GC", "folder", fdb.folderID, "fdb", fdb.baseName)
+			slogutil.Logger(s.sdb.sl).DebugContext(ctx, "Skipping unnecessary GC", "folder", fdb.folderID, "fdb", fdb.baseName)
 			return nil
 		}
 
@@ -184,7 +186,7 @@ func tidy(ctx context.Context, db *sqlx.DB) error {
 }
 
 func garbageCollectNamesAndVersions(ctx context.Context, fdb *folderDB) error {
-	l := slog.With("folder", fdb.folderID, "fdb", fdb.baseName)
+	l := slogutil.Logger(fdb.sl).With("folder", fdb.folderID, "fdb", fdb.baseName)
 
 	res, err := fdb.stmt(`
 		DELETE FROM file_names
@@ -212,9 +214,9 @@ func garbageCollectNamesAndVersions(ctx context.Context, fdb *folderDB) error {
 }
 
 func garbageCollectOldDeletedLocked(ctx context.Context, fdb *folderDB) error {
-	l := slog.With("folder", fdb.folderID, "fdb", fdb.baseName)
+	l := slogutil.Logger(fdb.sl).With("folder", fdb.folderID, "fdb", fdb.baseName)
 	if fdb.deleteRetention <= 0 {
-		slog.DebugContext(ctx, "Delete retention is infinite, skipping cleanup")
+		slogutil.Logger(fdb.sl).DebugContext(ctx, "Delete retention is infinite, skipping cleanup")
 		return nil
 	}
 
@@ -273,7 +275,7 @@ func garbageCollectBlocklistsAndBlocksLocked(ctx context.Context, fdb *folderDB)
 		}
 
 		chunks := max(gcMinChunks, rows/gcChunkSize)
-		l := slog.With("folder", fdb.folderID, "fdb", fdb.baseName, "table", table, "rows", rows, "chunks", chunks)
+		l := slogutil.Logger(fdb.sl).With("folder", fdb.folderID, "fdb", fdb.baseName, "table", table, "rows", rows, "chunks", chunks)
 
 		// Process rows in chunks up to a given time limit. We always use at
 		// least gcMinChunks chunks, then increase the number as the number of rows

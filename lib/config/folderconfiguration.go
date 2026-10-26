@@ -21,10 +21,11 @@ import (
 
 	"github.com/shirou/gopsutil/v4/disk"
 
-	"github.com/syncthing/syncthing/lib/build"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/structutil"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/structutil"
 )
 
 var (
@@ -47,6 +48,8 @@ type FolderDeviceConfiguration struct {
 }
 
 type FolderConfiguration struct {
+	sl                      *slog.Logger
+	IgnorePatterns          []string                    `json:"ignorePatterns" xml:"-"`
 	ID                      string                      `json:"id" xml:"id,attr" nodefault:"true"`
 	Label                   string                      `json:"label" xml:"label,attr" restart:"false"`
 	FilesystemType          FilesystemType              `json:"filesystemType" xml:"filesystemType" default:"basic"`
@@ -114,6 +117,7 @@ type XattrFilterEntry struct {
 
 func (f FolderConfiguration) Copy() FolderConfiguration {
 	c := f
+	c.IgnorePatterns = append([]string(nil), f.IgnorePatterns...)
 	c.Devices = make([]FolderDeviceConfiguration, len(f.Devices))
 	copy(c.Devices, f.Devices)
 	c.Versioning = f.Versioning.Copy()
@@ -126,7 +130,7 @@ func (f FolderConfiguration) Copy() FolderConfiguration {
 func (f FolderConfiguration) Filesystem(extraOpts ...fs.Option) fs.Filesystem {
 	// This is intentionally not a pointer method, because things like
 	// cfg.Folders["default"].Filesystem(nil) should be valid.
-	var opts []fs.Option
+	opts := []fs.Option{&fs.OptionLogger{Logger: f.Logger()}}
 	if f.FilesystemType == FilesystemTypeBasic && f.JunctionsAsDirs {
 		opts = append(opts, new(fs.OptionJunctionsAsDirs))
 	}
@@ -142,12 +146,12 @@ func (f FolderConfiguration) ModTimeWindow() time.Duration {
 	if f.RawModTimeWindowS < 1 && build.IsAndroid {
 		if usage, err := disk.Usage(f.Filesystem().URI()); err != nil {
 			dur = 2 * time.Second
-			l.Debugf(`Detecting FS at "%v" on android: Setting mtime window to 2s: err == "%v"`, f.Path, err)
+			slogutil.Adapter(f.Logger()).Debugf(`Detecting FS at "%v" on android: Setting mtime window to 2s: err == "%v"`, f.Path, err)
 		} else if strings.HasPrefix(strings.ToLower(usage.Fstype), "ext2") || strings.HasPrefix(strings.ToLower(usage.Fstype), "ext3") || strings.HasPrefix(strings.ToLower(usage.Fstype), "ext4") {
-			l.Debugf(`Detecting FS at %v on android: Leaving mtime window at 0: usage.Fstype == "%v"`, f.Path, usage.Fstype)
+			slogutil.Adapter(f.Logger()).Debugf(`Detecting FS at %v on android: Leaving mtime window at 0: usage.Fstype == "%v"`, f.Path, usage.Fstype)
 		} else {
 			dur = 2 * time.Second
-			l.Debugf(`Detecting FS at "%v" on android: Setting mtime window to 2s: usage.Fstype == "%v"`, f.Path, usage.Fstype)
+			slogutil.Adapter(f.Logger()).Debugf(`Detecting FS at "%v" on android: Setting mtime window to 2s: usage.Fstype == "%v"`, f.Path, usage.Fstype)
 		}
 	}
 	return dur
@@ -181,9 +185,9 @@ func (f *FolderConfiguration) CreateMarker() error {
 
 	// Sync & hide the containing directory
 	if dir, err := ffs.Open("."); err != nil {
-		l.Debugln("folder marker: open . failed:", err)
+		slogutil.Adapter(f.Logger()).Debugln("folder marker: open . failed:", err)
 	} else if err := dir.Sync(); err != nil {
-		l.Debugln("folder marker: fsync . failed:", err)
+		slogutil.Adapter(f.Logger()).Debugln("folder marker: fsync . failed:", err)
 	}
 	ffs.Hide(DefaultMarkerName)
 
@@ -403,3 +407,5 @@ func (f *FolderConfiguration) UnmarshalXML(d *xml.Decoder, start xml.StartElemen
 
 	return d.DecodeElement(ptr, &start)
 }
+
+func (cfg FolderConfiguration) Logger() *slog.Logger { return slogutil.Logger(cfg.sl) }

@@ -15,9 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/db"
-	"github.com/syncthing/syncthing/internal/slogutil"
-	"github.com/syncthing/syncthing/lib/build"
+	"github.com/victorarias/syncthing/internal/db"
+	"github.com/victorarias/syncthing/internal/slogutil"
 )
 
 const (
@@ -44,6 +43,7 @@ type DB struct {
 	pathBase        string
 	deleteRetention time.Duration
 
+	sl             *slog.Logger
 	folderDBsMut   sync.RWMutex
 	folderDBs      map[string]*folderDB
 	folderDBOpener func(folder, path string, deleteRetention time.Duration) (*folderDB, error)
@@ -52,6 +52,8 @@ type DB struct {
 var _ db.DB = (*DB)(nil)
 
 type Option func(*DB)
+
+func WithLogger(logger *slog.Logger) Option { return func(s *DB) { s.sl = slogutil.Logger(logger) } }
 
 func WithDeleteRetention(d time.Duration) Option {
 	return func(s *DB) {
@@ -64,6 +66,10 @@ func WithDeleteRetention(d time.Duration) Option {
 }
 
 func Open(path string, opts ...Option) (*DB, error) {
+	settings := &DB{}
+	for _, opt := range opts {
+		opt(settings)
+	}
 	pragmas := []string{
 		"journal_mode = WAL",
 		"optimize = 0x10002",
@@ -80,19 +86,21 @@ func Open(path string, opts ...Option) (*DB, error) {
 	}
 
 	_ = os.MkdirAll(path, 0o700)
-	initTmpDir(path)
 
 	mainPath := filepath.Join(path, "main.db")
-	mainBase, err := openBase(mainPath, maxOpenConns, maxIdleConns, pragmas, schemas, migrations)
+	mainBase, err := openBase(mainPath, maxOpenConns, maxIdleConns, pragmas, schemas, migrations, settings.sl)
 	if err != nil {
 		return nil, err
 	}
 
 	db := &DB{
-		pathBase:       path,
-		baseDB:         mainBase,
-		folderDBs:      make(map[string]*folderDB),
-		folderDBOpener: openFolderDB,
+		sl:        settings.sl,
+		pathBase:  path,
+		baseDB:    mainBase,
+		folderDBs: make(map[string]*folderDB),
+		folderDBOpener: func(folder, path string, retention time.Duration) (*folderDB, error) {
+			return openFolderDBWithLogger(folder, path, retention, settings.sl)
+		},
 	}
 
 	for _, opt := range opts {
@@ -100,7 +108,7 @@ func Open(path string, opts ...Option) (*DB, error) {
 	}
 
 	if err := db.cleanDroppedFolders(); err != nil {
-		slog.Warn("Failed to clean dropped folders", slogutil.Error(err))
+		slogutil.Logger(db.sl).Warn("Failed to clean dropped folders", slogutil.Error(err))
 	}
 
 	if err := db.startFolderDatabases(); err != nil {
@@ -131,7 +139,6 @@ func OpenForMigration(path string) (*DB, error) {
 	}
 
 	_ = os.MkdirAll(path, 0o700)
-	initTmpDir(path)
 
 	mainPath := filepath.Join(path, "main.db")
 	mainBase, err := openBase(mainPath, 1, 1, pragmas, schemas, migrations)
@@ -147,7 +154,7 @@ func OpenForMigration(path string) (*DB, error) {
 	}
 
 	if err := db.cleanDroppedFolders(); err != nil {
-		slog.Warn("Failed to clean dropped folders", slogutil.Error(err))
+		slogutil.Logger(db.sl).Warn("Failed to clean dropped folders", slogutil.Error(err))
 	}
 
 	return db, nil
@@ -161,25 +168,4 @@ func (s *DB) Close() error {
 		delete(s.folderDBs, folder)
 	}
 	return wrap(s.baseDB.Close())
-}
-
-func initTmpDir(path string) {
-	if build.IsWindows || build.IsDarwin || os.Getenv("SQLITE_TMPDIR") != "" {
-		// Doesn't use SQLITE_TMPDIR, isn't likely to have a tiny
-		// ram-backed temp directory, or already set to something.
-		return
-	}
-
-	// Attempt to override the SQLite temporary directory by setting the
-	// env var prior to the (first) database being opened and hence
-	// SQLite becoming initialized. We set the temp dir to the same
-	// place we store the database, in the hope that there will be
-	// enough space there for the operations it needs to perform, as
-	// opposed to /tmp and similar, on some systems.
-	dbTmpDir := filepath.Join(path, ".tmp")
-	if err := os.MkdirAll(dbTmpDir, 0o700); err == nil {
-		os.Setenv("SQLITE_TMPDIR", dbTmpDir)
-	} else {
-		slog.Warn("Failed to create temp directory for SQLite", slogutil.FilePath(dbTmpDir), slogutil.Error(err))
-	}
 }

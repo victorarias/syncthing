@@ -21,14 +21,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/itererr"
-	"github.com/syncthing/syncthing/lib/build"
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/ignore"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/scanner"
+	"github.com/victorarias/syncthing/internal/itererr"
+	"github.com/victorarias/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/ignore"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/scanner"
 )
 
 var blocks = []protocol.BlockInfo{
@@ -876,7 +876,7 @@ func TestDeleteBehindSymlink(t *testing.T) {
 	}
 }
 
-// Reproduces https://github.com/syncthing/syncthing/issues/6559
+// Reproduces https://github.com/victorarias/syncthing/issues/6559
 func TestPullCtxCancel(t *testing.T) {
 	_, f := setupSendReceiveFolder(t)
 

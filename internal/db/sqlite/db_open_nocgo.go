@@ -9,13 +9,13 @@
 package sqlite
 
 import (
-	"github.com/syncthing/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/build"
 	_ "modernc.org/sqlite" // register sqlite database driver
 )
 
 const (
 	dbDriver      = "sqlite"
-	commonOptions = "_pragma=foreign_keys(1)&_pragma=recursive_triggers(1)&_pragma=synchronous(1)&_txlock=immediate"
+	commonOptions = "_pragma=foreign_keys(1)&_pragma=recursive_triggers(1)&_pragma=synchronous(1)&_txlock=immediate&_pragma=temp_store(MEMORY)"
 )
 
 func init() {

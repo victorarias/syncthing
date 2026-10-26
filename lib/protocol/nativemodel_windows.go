@@ -11,11 +11,10 @@ package protocol
 // Windows uses backslashes as file separator
 
 import (
-	"log/slog"
 	"path/filepath"
 	"strings"
 
-	"github.com/syncthing/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/internal/slogutil"
 )
 
 func makeNative(m rawModel) rawModel { return nativeModel{m} }
@@ -36,7 +35,7 @@ func (m nativeModel) IndexUpdate(idxUp *IndexUpdate) error {
 
 func (m nativeModel) Request(req *Request) (RequestResponse, error) {
 	if strings.Contains(req.Name, `\`) {
-		slog.Debug("Dropping request containing invalid path separator", slogutil.FilePath(req.Name))
+		slogutil.Logger().Debug("Dropping request containing invalid path separator", slogutil.FilePath(req.Name))
 		return nil, ErrNoSuchFile
 	}
 
@@ -50,9 +49,9 @@ func fixupFiles(files []FileInfo) []FileInfo {
 		if strings.Contains(files[i].Name, `\`) {
 			if files[i].Deleted {
 				// Dropping a deleted item doesn't have any consequences.
-				slog.Debug("Dropping index entry containing invalid path separator", slogutil.FilePath(files[i].Name))
+				slogutil.Logger().Debug("Dropping index entry containing invalid path separator", slogutil.FilePath(files[i].Name))
 			} else {
-				slog.Error("Dropping index entry containing invalid path separator", slogutil.FilePath(files[i].Name))
+				slogutil.Logger().Error("Dropping index entry containing invalid path separator", slogutil.FilePath(files[i].Name))
 			}
 			if out == nil {
 				// Most incoming updates won't contain anything invalid, so

@@ -24,11 +24,11 @@ import (
 	"github.com/d4l3k/messagediff"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/syncthing/syncthing/lib/build"
-	"github.com/syncthing/syncthing/lib/events"
-	"github.com/syncthing/syncthing/lib/fs"
-	"github.com/syncthing/syncthing/lib/protocol"
-	"github.com/syncthing/syncthing/lib/rand"
+	"github.com/victorarias/syncthing/lib/build"
+	"github.com/victorarias/syncthing/lib/events"
+	"github.com/victorarias/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/lib/protocol"
+	"github.com/victorarias/syncthing/lib/rand"
 )
 
 var device1, device2, device3, device4 protocol.DeviceID
@@ -100,6 +100,7 @@ func TestDefaultValues(t *testing.T) {
 		},
 		Defaults: Defaults{
 			Folder: FolderConfiguration{
+				IgnorePatterns:   []string{},
 				FilesystemType:   FilesystemTypeBasic,
 				Path:             "",
 				Type:             FolderTypeSendReceive,
@@ -176,6 +177,7 @@ func TestDeviceConfig(t *testing.T) {
 
 		expectedFolders := []FolderConfiguration{
 			{
+				IgnorePatterns:   []string{},
 				ID:               "test",
 				FilesystemType:   FilesystemTypeBasic,
 				Path:             "testdata",

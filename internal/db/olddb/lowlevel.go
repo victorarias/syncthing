@@ -10,7 +10,7 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/syncthing/syncthing/internal/db/olddb/backend"
+	"github.com/victorarias/syncthing/internal/db/olddb/backend"
 )
 
 // deprecatedLowlevel is the lowest level database interface. It has a very simple

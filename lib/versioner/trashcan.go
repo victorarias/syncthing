@@ -12,8 +12,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/fs"
+	"github.com/victorarias/syncthing/internal/slogutil"
+	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/fs"
 )
 
 func init() {
@@ -39,7 +40,7 @@ func newTrashcan(cfg config.FolderConfiguration) Versioner {
 		copyRangeMethod: cfg.CopyRangeMethod.ToFS(),
 	}
 
-	l.Debugf("instantiated %#v", s)
+	slogutil.Adapter(cfg.Logger()).Debugf("instantiated %#v", s)
 	return s
 }
 

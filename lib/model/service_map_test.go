@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/syncthing/syncthing/lib/events"
 	"github.com/thejerf/suture/v4"
+	"github.com/victorarias/syncthing/lib/events"
 )
 
 func TestServiceMap(t *testing.T) {

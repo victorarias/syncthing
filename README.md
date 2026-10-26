@@ -34,21 +34,21 @@ err = engine.ServeConn(bridgeContext, conn, peerID)
 
 `New` takes an absolute index directory and a configuration value. `Serve` owns
 the engine until cancellation and closes its database before returning. Run it
-once per engine. `Ready` signals model initialization; first sync completion
-comes from index and folder-state events. Each engine routes logs to its supplied `*slog.Logger`; nil
-means discard. Importing the module leaves the process's default logger and
+once per engine. `Ready` signals model initialization. Watch index and
+folder-state events for first sync completion. Each engine routes logs to its
+supplied `*slog.Logger`. Nil means discard. Importing the module leaves the process's default logger and
 HTTP transport alone.
 
 Create the folder marker yourself, once when initializing a folder. The default
 marker is `.attn/notebook-sync`. The engine checks its presence and does not
-recreate it. Folder paths must be absolute, and markers must be custom relative
-paths under their folders.
+recreate it. Folder paths must be absolute, and markers must be relative paths under their folders. Syncthing's default
+`.stfolder` marker is refused.
 
 Set `FolderConfiguration.IgnorePatterns` in memory. The engine never reads or
 writes `.stignore`. Patterns support Syncthing's ignore syntax except `#include`,
-which is rejected before the configuration is applied. The defaults ignore
-`/.attn`, atomic-write temporary files, seed-transfer temporary files, and
-`.DS_Store`.
+which is rejected before the configuration is applied. The defaults are
+`/.attn`, `.*.tmp.*` (atomic-write temporary files), `.seed-transfer-*`, and
+`(?d).DS_Store`.
 
 `Configure` replaces the in-memory configuration and waits for it to apply.
 Use it to add or remove peers and folders, or change ignore patterns. The
@@ -73,12 +73,25 @@ modernc.org/sqlite. Both keep SQLite temporary storage in memory. Index files
 stay in the supplied directory; pulled-file temporary files stay in the folder.
 No asset generation or build tag is required.
 
+The two-process driver is in `script/attn/probe`. Give it a copied Notebook
+snapshot and a fresh run directory. The Linux run uses Landlock to confine
+writes to the supplied state and folder paths:
+
+```sh
+go build -o /tmp/attnsync-probe ./script/attn/probe
+python3 script/attn/probe/verify.py --fixture /path/to/notebook-copy \
+  --root /path/to/new-run --probe /tmp/attnsync-probe --sandbox
+```
+
+It checks hashes, edits, reconnects, conflict preservation, disconnect latency
+and file leftovers, then stops its child processes. Its `events.json` diagnostic
+contains names from the snapshot; keep that file private.
+
 ## Maintain the fork
 
-attn maintains this engine independently. There is no upstream API or rebase
-compatibility promise. To take an upstream security fix, inspect its diff against
+attn maintains this engine independently. The API evolves independently, and the branches do not rebase onto upstream. To take an upstream security fix, inspect its diff against
 the base commit above, port the affected engine code, and run the retained tests
-and the two-process sync probe before tagging the next version.
+and the two-process sync probe above before tagging the next version.
 
 Removed code includes the applications and GUI, transport management, discovery,
 relays, NAT traversal, TLS utilities, upgrades, usage-reporting services, the

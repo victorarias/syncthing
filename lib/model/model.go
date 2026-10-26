@@ -35,7 +35,6 @@ import (
 	"github.com/syncthing/syncthing/internal/slogutil"
 	"github.com/syncthing/syncthing/lib/build"
 	"github.com/syncthing/syncthing/lib/config"
-	"github.com/syncthing/syncthing/lib/connections"
 	"github.com/syncthing/syncthing/lib/events"
 	"github.com/syncthing/syncthing/lib/fs"
 	"github.com/syncthing/syncthing/lib/ignore"
@@ -76,7 +75,9 @@ type Availability struct {
 type Model interface {
 	suture.Service
 
-	connections.Model
+	protocol.Model
+	AddConnection(conn protocol.Connection, hello protocol.Hello)
+	OnHello(protocol.DeviceID, net.Addr, protocol.Hello) error
 
 	ResetFolder(folder string) error
 	DelayScan(folder string, next time.Duration)

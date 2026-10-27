@@ -344,3 +344,26 @@ func fakefsForTest(nfiles int, latency time.Duration, opts ...Option) (Filesyste
 
 	return fsys, paths, nil
 }
+
+func TestCaseRenameIsImmediatelyVisibleThroughAnotherHandle(t *testing.T) {
+	root := t.TempDir() + "?insens=true"
+	first := NewFilesystem(FilesystemTypeFake, root, &OptionDetectCaseConflicts{})
+	second := NewFilesystem(FilesystemTypeFake, root, &OptionDetectCaseConflicts{})
+	file, err := first.Create("Original.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file.Close()
+	if _, err := second.Stat("Original.md"); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Rename("Original.md", "original.md"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := second.Stat("original.md"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := second.Stat("Original.md"); !IsErrCaseConflict(err) {
+		t.Fatalf("wrong casing: %v", err)
+	}
+}

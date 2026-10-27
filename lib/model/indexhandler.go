@@ -191,7 +191,10 @@ func (s *indexHandler) Serve(ctx context.Context) (err error) {
 	// Subscribe to LocalIndexUpdated (we have new information to send) and
 	// DeviceDisconnected (it might be us who disconnected, so we should
 	// exit).
-	sub := s.evLogger.Subscribe(events.LocalIndexUpdated | events.DeviceDisconnected)
+	sub, err := s.evLogger.SubscribeContext(ctx, events.LocalIndexUpdated|events.DeviceDisconnected)
+	if err != nil {
+		return err
+	}
 	defer sub.Unsubscribe()
 
 	evChan := sub.C()

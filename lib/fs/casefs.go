@@ -13,9 +13,9 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"weak"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/victorarias/syncthing/internal/slogutil"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -50,12 +50,9 @@ type fskey struct {
 	uri, opts string
 }
 
-// caseFilesystemRegistry caches caseFilesystems and runs a routine to drop
-// their cache every now and then.
 type caseFilesystemRegistry struct {
-	caseCaches   map[fskey]*caseCache
-	mut          sync.RWMutex
-	startCleaner sync.Once
+	caseCaches map[fskey]weak.Pointer[caseCache]
+	mut        sync.Mutex
 }
 
 func newFSKey(fs Filesystem) fskey {
@@ -74,64 +71,22 @@ func newFSKey(fs Filesystem) fskey {
 
 func (r *caseFilesystemRegistry) get(fs Filesystem) Filesystem {
 	k := newFSKey(fs)
-
-	// Use double locking when getting a caseFs. In the common case it will
-	// already exist and we take the read lock fast path. If it doesn't, we
-	// take a write lock and try again.
-
-	r.mut.RLock()
-	cache, ok := r.caseCaches[k]
-	r.mut.RUnlock()
-
-	if !ok {
-		r.mut.Lock()
-		cache, ok = r.caseCaches[k]
-		if !ok {
-			cache = newCaseCache()
-			r.caseCaches[k] = cache
-			r.startCleaner.Do(func() {
-				go r.cleaner()
-			})
-			slogutil.Adapter(slogutil.Logger()).Debugf("Created new case cache for key %v", k)
+	r.mut.Lock()
+	cache := r.caseCaches[k].Value()
+	if cache == nil {
+		for key, entry := range r.caseCaches {
+			if entry.Value() == nil {
+				delete(r.caseCaches, key)
+			}
 		}
-		r.mut.Unlock()
+		cache = newCaseCache()
+		r.caseCaches[k] = weak.Make(cache)
 	}
-	if ok {
-		slogutil.Adapter(slogutil.Logger()).Debugf("Reusing case cache for key %v", k)
-	}
-
-	return &caseFilesystem{
-		Filesystem: fs,
-		realCaser: &defaultRealCaser{
-			fs:    fs,
-			cache: cache,
-		},
-	}
+	r.mut.Unlock()
+	return &caseFilesystem{Filesystem: fs, realCaser: &defaultRealCaser{fs: fs, cache: cache}}
 }
 
-func (r *caseFilesystemRegistry) cleaner() {
-	for range time.NewTicker(time.Minute).C {
-		// We need to not hold this lock for a long time, as it blocks
-		// creating new filesystems in get(), which is needed to do things
-		// like add new folders. The (*caseFs).dropCache() method can take
-		// an arbitrarily long time to kick in because it in turn waits for
-		// locks held by things performing I/O. So we can't call that from
-		// within the loop.
-
-		r.mut.RLock()
-		toProcess := make([]*caseCache, 0, len(r.caseCaches))
-		for _, cache := range r.caseCaches {
-			toProcess = append(toProcess, cache)
-		}
-		r.mut.RUnlock()
-
-		for _, cache := range toProcess {
-			cache.Purge()
-		}
-	}
-}
-
-var globalCaseFilesystemRegistry = caseFilesystemRegistry{caseCaches: make(map[fskey]*caseCache)}
+var globalCaseFilesystemRegistry = caseFilesystemRegistry{caseCaches: make(map[fskey]weak.Pointer[caseCache])}
 
 // OptionDetectCaseConflicts ensures that the potentially case-insensitive filesystem
 // behaves like a case-sensitive filesystem. Meaning that it takes into account

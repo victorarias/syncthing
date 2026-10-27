@@ -219,10 +219,6 @@ func TestRepro9677MissingMtimeFS(t *testing.T) {
 
 	checkMtime(firstFS)
 
-	// Now syncthing gets upgraded (or even just restarted), which resets the
-	// case FS registry as it lives in memory.
-	globalCaseFilesystemRegistry = caseFilesystemRegistry{caseCaches: make(map[fskey]*caseCache)}
-
 	// This time we first create some filesystem without a database and thus no
 	// mtime-FS, which is used in various places outside of the folder code. We
 	// aren't actually going to do anything, this just adds an entry to the

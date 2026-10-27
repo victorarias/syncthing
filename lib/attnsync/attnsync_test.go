@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/victorarias/syncthing/lib/attnsync"
@@ -339,4 +340,21 @@ func TestSubscriptionCancellationBeforeServeAndAfterShutdown(t *testing.T) {
 	if sub, err := engine.SubscribeContext(serving, events.AllEvents); sub != nil || !errors.Is(err, context.Canceled) {
 		t.Fatalf("after shutdown: %v, %v", sub, err)
 	}
+}
+
+func TestEngineShutdownLeavesNoBackgroundWork(t *testing.T) {
+	id := protocol.NewDeviceID([]byte("shutdown"))
+	cfg, _ := configuration(t, id, protocol.NewDeviceID([]byte("peer")))
+	synctest.Test(t, func(t *testing.T) {
+		engine, err := attnsync.New(t.TempDir(), cfg, id, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() { done <- engine.Serve(ctx) }()
+		<-engine.Ready()
+		cancel()
+		<-done
+	})
 }

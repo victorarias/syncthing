@@ -206,7 +206,10 @@ func (c *folderSummaryService) Summary(folder string) (*FolderSummary, error) {
 // listenForUpdates subscribes to the event bus and makes note of folders that
 // need their data recalculated.
 func (c *folderSummaryService) listenForUpdates(ctx context.Context) error {
-	sub := c.evLogger.Subscribe(events.LocalIndexUpdated | events.RemoteIndexUpdated | events.StateChanged | events.RemoteDownloadProgress | events.DeviceConnected | events.ClusterConfigReceived | events.FolderWatchStateChanged | events.DownloadProgress)
+	sub, err := c.evLogger.SubscribeContext(ctx, events.LocalIndexUpdated|events.RemoteIndexUpdated|events.StateChanged|events.RemoteDownloadProgress|events.DeviceConnected|events.ClusterConfigReceived|events.FolderWatchStateChanged|events.DownloadProgress)
+	if err != nil {
+		return err
+	}
 	defer sub.Unsubscribe()
 
 	for {

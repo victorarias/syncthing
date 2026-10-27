@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"path/filepath"
 	"time"
 
@@ -21,7 +20,7 @@ import (
 
 // inWritableDir calls fn(path), while making sure that the directory
 // containing `path` is writable for the duration of the call.
-func inWritableDir(fn func(string) error, targetFs fs.Filesystem, path string, ignorePerms bool, loggers ...*slog.Logger) error {
+func inWritableDir(fn func(string) error, targetFs fs.Filesystem, path string, ignorePerms bool) error {
 	dir := filepath.Dir(path)
 	info, err := targetFs.Stat(dir)
 	if err != nil {
@@ -39,7 +38,7 @@ func inWritableDir(fn func(string) error, targetFs fs.Filesystem, path string, i
 		// file or directory inside it.
 		parentErr = targetFs.Chmod(dir, mode|0o700)
 		if parentErr != nil {
-			slogutil.Adapter(slogutil.Logger(loggers...)).Debugf("Failed to make parent directory writable: %v", parentErr)
+			slogutil.Adapter(fs.Logger(targetFs)).Debugf("Failed to make parent directory writable: %v", parentErr)
 		} else {
 			// Chmod succeeded, we should change the permissions back on the way
 			// out. If we fail we log the error as we have irrevocably messed up
@@ -48,9 +47,9 @@ func inWritableDir(fn func(string) error, targetFs fs.Filesystem, path string, i
 			// caller is inappropriate.)
 			defer func() {
 				if err := targetFs.Chmod(dir, mode); err != nil && !fs.IsNotExist(err) {
-					logFn := slogutil.Logger(loggers...).Warn
+					logFn := fs.Logger(targetFs).Warn
 					if ignorePerms {
-						logFn = slogutil.Logger(loggers...).Debug
+						logFn = fs.Logger(targetFs).Debug
 					}
 					logFn("Failed to restore directory permissions after gaining write access", slogutil.Error(err))
 				}

@@ -7,6 +7,10 @@
 package model
 
 import (
+	"bytes"
+	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/victorarias/syncthing/lib/build"
@@ -172,5 +176,34 @@ func TestInWritableDirWindowsRename(t *testing.T) {
 		if err != nil {
 			t.Errorf("Unexpected error %s: %s", path, err)
 		}
+	}
+}
+
+type restoreDeniedFilesystem struct {
+	fs.Filesystem
+	chmods int
+}
+
+func (f *restoreDeniedFilesystem) Chmod(path string, mode fs.FileMode) error {
+	f.chmods++
+	if f.chmods == 2 {
+		return errors.New("restore denied")
+	}
+	return f.Filesystem.Chmod(path, mode)
+}
+
+func TestWritableDirectoryRestoreReportsThroughItsFilesystemLogger(t *testing.T) {
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logs, nil))
+	filesystem := fs.NewFilesystem(fs.FilesystemTypeBasic, t.TempDir(), &fs.OptionLogger{Logger: logger})
+	if err := filesystem.Mkdir("locked", 0o500); err != nil {
+		t.Fatal(err)
+	}
+	failing := &restoreDeniedFilesystem{Filesystem: filesystem}
+	if err := inWritableDir(func(string) error { return nil }, failing, "locked/file", false); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(logs.String(), "restore denied") {
+		t.Fatalf("restore failure missing from embedder log: %s", logs.String())
 	}
 }

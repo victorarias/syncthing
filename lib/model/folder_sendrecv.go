@@ -2210,7 +2210,7 @@ func (f *sendReceiveFolder) copyOwnershipFromParent(path string) error {
 }
 
 func (f *sendReceiveFolder) inWritableDir(fn func(string) error, path string) error {
-	return inWritableDir(fn, f.mtimefs, path, f.IgnorePerms, f.sl)
+	return inWritableDir(fn, f.mtimefs, path, f.IgnorePerms)
 }
 
 func (f *sendReceiveFolder) limitedWriteAt(ctx context.Context, fd io.WriterAt, data []byte, offset int64) error {

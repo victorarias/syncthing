@@ -2,8 +2,8 @@
 
 This repository is attn's embedded file synchronization engine. It started at
 Syncthing v2.1.6, commit `4461a1ce354d3990660966ad70176e00246adb61`.
-The `main` and `attn` branches contain the engine; attn pins `v0.1.0` with a plain
-`require github.com/victorarias/syncthing v0.1.0`.
+The `main` and `attn` branches contain the engine; attn pins `v0.1.1` with a plain
+`require github.com/victorarias/syncthing v0.1.1`.
 
 The embedder owns authentication and transport. The engine exchanges the file
 sync protocol over a `net.Conn` the embedder supplies. It opens no listener,

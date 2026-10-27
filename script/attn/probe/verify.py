@@ -8,7 +8,7 @@
 """Two real processes, caller-owned TCP, copied Notebook, event-driven checks."""
 import argparse,fnmatch,hashlib,json,os,pathlib,queue,shutil,subprocess,sys,threading,time
 ap=argparse.ArgumentParser();ap.add_argument('--fixture',required=True);ap.add_argument('--root',required=True);ap.add_argument('--probe',required=True);ap.add_argument('--sandbox',action='store_true');args=ap.parse_args()
-root=pathlib.Path(args.root).resolve();root.mkdir();q=queue.Queue();workers={};ready={};all_events=[]
+root=pathlib.Path(args.root).resolve();root.mkdir();q=queue.Queue();replies={};workers={};ready={};all_events=[]
 def ignored(path):return any(p=='.attn' or p=='.DS_Store' or fnmatch.fnmatch(p,'.*.tmp.*') or fnmatch.fnmatch(p,'.seed-transfer-*') for p in path.parts)
 def digest(folder):
  manifest={};total=0
@@ -28,11 +28,21 @@ def digest(folder):
 
 def send(name,op,**kw):
  p=workers[name];p.stdin.write(json.dumps(dict(op=op,**kw))+'\n');p.stdin.flush()
+def receive(source):
+ name,e=source.get();all_events.append((name,e))
+ if e.get('kind')=='exited':raise RuntimeError(f"worker {name} exited: {e['status']}; see {root/name/'state/driver.stderr'}")
+ if e.get('kind')=='invalid-output':raise RuntimeError(f"unexpected stdout from {name}: {e['line']}")
+ return name,e
+
 def get(predicate):
  while True:
-  name,e=q.get();all_events.append((name,e))
-  if e.get('kind')=='exited':raise RuntimeError(f"worker {name} exited: {e['status']}; see {root/name/'state/driver.stderr'}")
+  name,e=receive(q)
   if predicate(name,e):return name,e
+
+def reply(name,kind):
+ while True:
+  _,e=receive(replies[name])
+  if e.get('kind')==kind:return e
 
 def event(name,kind,item=None):
  return get(lambda n,e:n==name and e.get('type')==kind and (item is None or e.get('data',{}).get('item')==item))
@@ -42,7 +52,7 @@ def indexed(name,filename,after):
  get(pred)
 
 def state(name):
- send(name,'state');return get(lambda n,e:n==name and e.get('kind')=='state')[1]
+ send(name,'state');return reply(name,'state')
 def wait_contents(name,file,content):
  path=root/name/'folder'/file
  while True:
@@ -56,16 +66,20 @@ try:
   else:folder.mkdir()
   cmd=[str(pathlib.Path(args.probe).resolve()),'-folder',str(folder),'-state',str(state_dir),'-name',name,'-peer',peer]
   if args.sandbox:cmd=[sys.executable,str(pathlib.Path(__file__).resolve().with_name('sandbox.py')),str(state_dir),str(folder)]+cmd
-  err=(state_dir/'driver.stderr').open('w');p=subprocess.Popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=err,cwd=cwd,text=True);workers[name]=p
+  err=(state_dir/'driver.stderr').open('w');p=subprocess.Popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=err,cwd=cwd,text=True);workers[name]=p;replies[name]=queue.Queue()
   def read(p=p,name=name):
    for line in p.stdout:
-    try:q.put((name,json.loads(line)))
-    except json.JSONDecodeError:q.put((name,{'kind':'invalid-output','line':line}))
-   q.put((name,{'kind':'exited','status':p.wait()}))
+    try:e=json.loads(line)
+    except json.JSONDecodeError:e={'kind':'invalid-output','line':line}
+    if e.get('kind') in ['event','conn_done']:q.put((name,e))
+    elif e.get('kind')=='invalid-output':
+     q.put((name,e));replies[name].put((name,e))
+    else:replies[name].put((name,e))
+   exited=(name,{'kind':'exited','status':p.wait()})
+   q.put(exited);replies[name].put(exited)
+
   threading.Thread(target=read,daemon=True).start()
- for _ in range(2):
-  name,e=get(lambda n,e:e.get('kind') in ['ready','exited','invalid-output'])
-  assert e['kind']=='ready',(name,e);ready[name]=e['address']
+ for name in workers:ready[name]=reply(name,'ready')['address']
  baseline,byte_count=digest(root/'a/folder');start=time.monotonic();send('a','dial',address=ready['b'])
  # At the end of a transfer the receiver returns to idle. Hash only at that signal.
  while True:
@@ -81,11 +95,10 @@ try:
   print(json.dumps({'check':'edit','direction':src+'->'+dst,'seconds':(time.time_ns()-at)/1e9}),flush=True)
  baseline_at=time.time_ns();(root/'a/folder/conflict.md').write_text('before partition\n');wait_contents('b','conflict.md','before partition\n');indexed('b','conflict.md',baseline_at)
  # Connection close receipt comes from the engine's DeviceDisconnected event.
- send('a','cut');cut=None;disconnected={}
- while cut is None or len(disconnected)<2:
-  name,e=get(lambda n,e:e.get('kind')=='cut' or e.get('type')=='DeviceDisconnected')
-  if e.get('kind')=='cut':cut=e['time']
-  else:disconnected[name]=e['time']
+ send('a','cut');cut=reply('a','cut')['time'];disconnected={}
+ while len(disconnected)<2:
+  name,e=get(lambda n,e:e.get('type')=='DeviceDisconnected')
+  disconnected[name]=e['time']
  latencies={n:(t-cut)/1e6 for n,t in disconnected.items()}
  assert all(0<=v<100 for v in latencies.values()),f'disconnect_ms limit=100, measured={latencies}'
  print(json.dumps({'check':'disconnect','milliseconds':latencies}),flush=True)
@@ -106,12 +119,16 @@ try:
    contents={n:{(root/n/'folder/conflict.md').read_text(),*[p.read_text() for p in copies[n]]} for n in ['a','b']}
    if all(v=={'a partition\n','b partition\n'} for v in contents.values()):break
  a,_=digest(root/'a/folder');b,_=digest(root/'b/folder');assert a==b
+ for n in ['a','b']:
+  if not any(nn==n and e.get('conflict') for nn,e in all_events):get(lambda nn,e:nn==n and e.get('conflict'))
  assert {n for n,e in all_events if e.get('conflict')}=={'a','b'}
  print(json.dumps({'check':'conflict','preserved_versions':2,'detected_on':['a','b']}),flush=True)
  print(json.dumps({'check':'reconnect','sha256_equal':True,'files':len(a)}),flush=True)
  # Measure the repeated edit case at the upstream-derived timeout and at 1 second.
  for timeout in [0,1]:
-  for n in ['a','b']:send(n,'configure',timeout=timeout);get(lambda nn,e:nn==n and e.get('kind')=='configured')
+  for n in ['a','b']:
+   send(n,'configure',timeout=timeout)
+   assert reply(n,'configured')['error']=='<nil>'
   # Wait for both watchers to start after their configuration restart.
   for n in ['a','b']:
    s=state(n)

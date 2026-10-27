@@ -29,7 +29,7 @@ import (
 	"github.com/victorarias/syncthing/lib/svcutil"
 )
 
-const Version = "v0.1.2"
+const Version = "v0.1.3"
 
 type Engine struct {
 	ID         protocol.DeviceID

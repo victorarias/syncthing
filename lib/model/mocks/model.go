@@ -574,6 +574,19 @@ type Model struct {
 	revertArgsForCall []struct {
 		arg1 string
 	}
+	ScanCompleteStub        func(string) (bool, error)
+	scanCompleteMutex       sync.RWMutex
+	scanCompleteArgsForCall []struct {
+		arg1 string
+	}
+	scanCompleteReturns struct {
+		result1 bool
+		result2 error
+	}
+	scanCompleteReturnsOnCall map[int]struct {
+		result1 bool
+		result2 error
+	}
 	ScanFolderStub        func(string) error
 	scanFolderMutex       sync.RWMutex
 	scanFolderArgsForCall []struct {
@@ -3341,6 +3354,70 @@ func (fake *Model) RevertArgsForCall(i int) string {
 	defer fake.revertMutex.RUnlock()
 	argsForCall := fake.revertArgsForCall[i]
 	return argsForCall.arg1
+}
+
+func (fake *Model) ScanComplete(arg1 string) (bool, error) {
+	fake.scanCompleteMutex.Lock()
+	ret, specificReturn := fake.scanCompleteReturnsOnCall[len(fake.scanCompleteArgsForCall)]
+	fake.scanCompleteArgsForCall = append(fake.scanCompleteArgsForCall, struct {
+		arg1 string
+	}{arg1})
+	stub := fake.ScanCompleteStub
+	fakeReturns := fake.scanCompleteReturns
+	fake.recordInvocation("ScanComplete", []interface{}{arg1})
+	fake.scanCompleteMutex.Unlock()
+	if stub != nil {
+		return stub(arg1)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *Model) ScanCompleteCallCount() int {
+	fake.scanCompleteMutex.RLock()
+	defer fake.scanCompleteMutex.RUnlock()
+	return len(fake.scanCompleteArgsForCall)
+}
+
+func (fake *Model) ScanCompleteCalls(stub func(string) (bool, error)) {
+	fake.scanCompleteMutex.Lock()
+	defer fake.scanCompleteMutex.Unlock()
+	fake.ScanCompleteStub = stub
+}
+
+func (fake *Model) ScanCompleteArgsForCall(i int) string {
+	fake.scanCompleteMutex.RLock()
+	defer fake.scanCompleteMutex.RUnlock()
+	argsForCall := fake.scanCompleteArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *Model) ScanCompleteReturns(result1 bool, result2 error) {
+	fake.scanCompleteMutex.Lock()
+	defer fake.scanCompleteMutex.Unlock()
+	fake.ScanCompleteStub = nil
+	fake.scanCompleteReturns = struct {
+		result1 bool
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *Model) ScanCompleteReturnsOnCall(i int, result1 bool, result2 error) {
+	fake.scanCompleteMutex.Lock()
+	defer fake.scanCompleteMutex.Unlock()
+	fake.ScanCompleteStub = nil
+	if fake.scanCompleteReturnsOnCall == nil {
+		fake.scanCompleteReturnsOnCall = make(map[int]struct {
+			result1 bool
+			result2 error
+		})
+	}
+	fake.scanCompleteReturnsOnCall[i] = struct {
+		result1 bool
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *Model) ScanFolder(arg1 string) error {

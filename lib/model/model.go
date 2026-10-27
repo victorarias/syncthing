@@ -59,6 +59,7 @@ type service interface {
 	SchedulePull()                                    // something relevant changed, we should try a pull
 	Jobs(page, perpage int) ([]string, []string, int) // In progress, Queued, skipped
 	Scan(subs []string) error
+	ScanComplete() bool
 	Errors() []FileError
 	WatchError() error
 	ScheduleForceRescan(path string)
@@ -86,6 +87,7 @@ type Model interface {
 	ScanFolders() map[string]error
 	ScanFolderSubdirs(folder string, subs []string) error
 	State(folder string) (string, time.Time, error)
+	ScanComplete(folder string) (bool, error)
 	FolderErrors(folder string) ([]FileError, error)
 	WatchError(folder string) error
 	Override(folder string)
@@ -3449,3 +3451,14 @@ func without[E comparable, S ~[]E](s S, e E) S {
 }
 
 func (m *model) Started() <-chan struct{} { return m.started }
+
+func (m *model) ScanComplete(folder string) (bool, error) {
+	m.mut.RLock()
+	err := m.checkFolderRunningRLocked(folder)
+	runner, _ := m.folderRunners.Get(folder)
+	m.mut.RUnlock()
+	if err != nil {
+		return false, err
+	}
+	return runner.ScanComplete(), nil
+}

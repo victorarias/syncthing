@@ -29,7 +29,7 @@ import (
 	"github.com/victorarias/syncthing/lib/svcutil"
 )
 
-const Version = "v0.1.1"
+const Version = "v0.1.2"
 
 type Engine struct {
 	ID         protocol.DeviceID
@@ -217,3 +217,47 @@ func (c connectionInfo) ConnectionID() string     { return c.id }
 
 // IsConflict reports whether a file name is a Syncthing conflict copy.
 func IsConflict(path string) bool { return strings.Contains(filepath.Base(path), ".sync-conflict-") }
+
+type FolderSnapshot struct {
+	FolderState
+	ScanComplete    bool
+	LocalSequence   int64
+	PeerSequence    int64
+	NeedItems       int
+	NeedDeletes     int
+	PeerNeedItems   int
+	PeerNeedDeletes int
+	PeerNeedBytes   int64
+	Errors          []model.FileError
+}
+
+func (e *Engine) Snapshot(folder string, peer protocol.DeviceID) (FolderSnapshot, error) {
+	var snapshot FolderSnapshot
+	var err error
+	if snapshot.ScanComplete, err = e.model.ScanComplete(folder); err != nil {
+		return snapshot, err
+	}
+	if snapshot.LocalSequence, err = e.model.Sequence(folder, protocol.LocalDeviceID); err != nil {
+		return snapshot, err
+	}
+	if snapshot.PeerSequence, err = e.model.Sequence(folder, peer); err != nil {
+		return snapshot, err
+	}
+	local, err := e.model.Completion(e.ID, folder)
+	if err != nil {
+		return snapshot, err
+	}
+	remote, err := e.model.Completion(peer, folder)
+	if err != nil {
+		return snapshot, err
+	}
+	if snapshot.FolderState, err = e.FolderState(folder); err != nil {
+		return snapshot, err
+	}
+	if snapshot.Errors, err = e.model.FolderErrors(folder); err != nil {
+		return snapshot, err
+	}
+	snapshot.NeedItems, snapshot.NeedDeletes = local.NeedItems, local.NeedDeletes
+	snapshot.PeerNeedItems, snapshot.PeerNeedDeletes, snapshot.PeerNeedBytes = remote.NeedItems, remote.NeedDeletes, remote.NeedBytes
+	return snapshot, nil
+}

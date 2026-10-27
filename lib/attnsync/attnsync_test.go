@@ -245,3 +245,67 @@ func TestCancelBeforeProtocolPromotion(t *testing.T) {
 		t.Fatalf("cancel before protocol promotion took %v, want <100ms", elapsed)
 	}
 }
+
+func TestSnapshotDistinguishesAnEmptyScanFromAnUnknownFolderAndKeepsErrorsCurrent(t *testing.T) {
+	id, peer := protocol.NewDeviceID([]byte("snapshot-local")), protocol.NewDeviceID([]byte("snapshot-peer"))
+	cfg, root := configuration(t, id, peer)
+	marker := filepath.Join(root, ".attn/notebook-sync")
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	engine := start(t, cfg, id)
+	sub := engine.Subscribe(events.AllEvents)
+	defer sub.Unsubscribe()
+	await := func(matches func(attnsync.FolderSnapshot) bool) attnsync.FolderSnapshot {
+		t.Helper()
+		for {
+			snapshot, err := engine.Snapshot("notebook", peer)
+			if err == nil && matches(snapshot) {
+				return snapshot
+			}
+			if _, ok := <-sub.C(); !ok {
+				t.Fatalf("events ended: %+v, %v", snapshot, err)
+			}
+		}
+	}
+	failed := await(func(s attnsync.FolderSnapshot) bool { return s.Error != nil })
+	if failed.ScanComplete {
+		t.Fatal("missing marker counted as a completed scan")
+	}
+	restartFolder := func() {
+		t.Helper()
+		cfg.Folders[0].Paused = true
+		if err := engine.Configure(cfg); err != nil {
+			t.Fatal(err)
+		}
+		cfg.Folders[0].Paused = false
+		if err := engine.Configure(cfg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(t, marker, "")
+	restartFolder()
+	empty := await(func(s attnsync.FolderSnapshot) bool { return s.ScanComplete && s.State == "idle" })
+	if empty.LocalSequence != 0 || empty.NeedItems != 0 || empty.NeedDeletes != 0 || empty.Error != nil || len(empty.Errors) != 0 {
+		t.Fatalf("empty scan: %+v", empty)
+	}
+	blocked := filepath.Join(root, "blocked.md")
+	write(t, blocked, "cannot hash this")
+	if err := os.Chmod(blocked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0600) })
+	restartFolder()
+	failure := await(func(s attnsync.FolderSnapshot) bool { return len(s.Errors) != 0 })
+	if failure.Errors[0].Path != "blocked.md" || !strings.Contains(failure.Errors[0].Err, "permission denied") {
+		t.Fatalf("file error missing its reason: %+v", failure)
+	}
+	if err := os.Chmod(blocked, 0600); err != nil {
+		t.Fatal(err)
+	}
+	restartFolder()
+	repaired := await(func(s attnsync.FolderSnapshot) bool { return s.ScanComplete && s.State == "idle" && len(s.Errors) == 0 })
+	if repaired.Error != nil || repaired.LocalSequence == 0 {
+		t.Fatalf("repaired scan: %+v", repaired)
+	}
+}

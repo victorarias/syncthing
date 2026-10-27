@@ -2,8 +2,8 @@
 
 This repository is attn's embedded file synchronization engine. It started at
 Syncthing v2.1.6, commit `4461a1ce354d3990660966ad70176e00246adb61`.
-The `main` and `attn` branches contain the engine; attn pins `v0.1.1` with a plain
-`require github.com/victorarias/syncthing v0.1.1`.
+The `main` and `attn` branches contain the engine; attn pins `v0.1.2` with a plain
+`require github.com/victorarias/syncthing v0.1.2`.
 
 The embedder owns authentication and transport. The engine exchanges the file
 sync protocol over a `net.Conn` the embedder supplies. It opens no listener,
@@ -34,8 +34,8 @@ err = engine.ServeConn(bridgeContext, conn, peerID)
 
 `New` takes an absolute index directory and a configuration value. `Serve` owns
 the engine until cancellation and closes its database before returning. Run it
-once per engine. `Ready` signals model initialization. Watch index and
-folder-state events for first sync completion. Each engine routes logs to its
+once per engine. `Ready` signals model initialization. Use `Snapshot` after engine events to assess folder convergence.
+Initial idle and 100% completion alone do not prove first sync. Each engine routes logs to its
 supplied `*slog.Logger`. Nil means discard. Importing the module leaves the process's default logger and
 HTTP transport alone.
 
@@ -54,8 +54,16 @@ which is rejected before the configuration is applied. The defaults are
 Use it to add or remove peers and folders, or change ignore patterns. The
 embedder stores configuration; the engine writes no config.xml.
 
+`Snapshot(folder, peer)` returns a completed full-scan flag, the local and
+received-peer sequences, outstanding items, deletions and bytes on both sides,
+and current per-file errors. A completed scan can have file errors, so check
+those too. Exchange post-scan sequences with the peer, require each received
+sequence to reach the other side's advertised sequence, and require zero
+outstanding items and deletions with no errors before declaring first sync.
+An empty folder has sequence zero after a completed scan.
+
 `FolderState` returns sync state, outstanding files and bytes, and the folder
-error. `Completion` reports a peer's progress. `Subscribe` exposes the engine's
+health error. It omits per-file errors; use `Snapshot` for complete health. `Completion` reports a peer's progress. `Subscribe` exposes the engine's
 events, including state, index updates, file changes and disconnects.
 `IsConflict` identifies `*.sync-conflict-*` file names from those events. The
 embedder owns conflict counts and notifications.

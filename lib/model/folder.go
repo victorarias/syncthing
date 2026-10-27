@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/victorarias/syncthing/internal/db"
@@ -61,6 +62,7 @@ type folder struct {
 	scanTimer              *time.Timer
 	scanDelay              chan time.Duration
 	initialScanFinished    chan struct{}
+	fullScanComplete       atomic.Bool
 	scanScheduled          chan struct{}
 	versionCleanupInterval time.Duration
 	versionCleanupTimer    *time.Timer
@@ -509,6 +511,7 @@ func (f *folder) scanSubdirs(ctx context.Context, subDirs []string) error {
 		return err == nil && ok
 	})
 
+	fullScan := len(subDirs) == 0
 	f.setState(FolderScanning)
 	f.clearScanErrors(subDirs)
 
@@ -554,6 +557,9 @@ func (f *folder) scanSubdirs(ctx context.Context, subDirs []string) error {
 	}
 
 	f.ScanCompleted()
+	if fullScan {
+		f.fullScanComplete.Store(true)
+	}
 	return nil
 }
 
@@ -1468,3 +1474,5 @@ func (cf cFiler) CurrentFile(file string) (protocol.FileInfo, bool) {
 	}
 	return fi, true
 }
+
+func (f *folder) ScanComplete() bool { return f.fullScanComplete.Load() }

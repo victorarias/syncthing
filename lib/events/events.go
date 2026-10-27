@@ -265,6 +265,7 @@ type Event struct {
 
 type Subscription interface {
 	C() <-chan Event
+	Overflow() <-chan struct{}
 	Poll(timeout time.Duration) (Event, error)
 	Mask() EventType
 	Unsubscribe()
@@ -274,6 +275,7 @@ type subscription struct {
 	sl            *slog.Logger
 	mask          EventType
 	events        chan Event
+	overflow      chan struct{}
 	toUnsubscribe chan *subscription
 	timeout       *time.Timer
 	ctx           context.Context
@@ -360,6 +362,10 @@ func (l *logger) sendEvent(e Event) {
 			case <-l.timeout.C:
 				// if s.events is not ready, drop the event
 				timedOut = true
+				select {
+				case s.overflow <- struct{}{}:
+				default:
+				}
 				metricEvents.WithLabelValues(e.Type.String(), metricEventStateDropped).Inc()
 			}
 
@@ -387,6 +393,7 @@ func (l *logger) SubscribeContext(ctx context.Context, mask EventType) (Subscrip
 			sl:            l.sl,
 			mask:          mask,
 			events:        make(chan Event, BufferSize),
+			overflow:      make(chan struct{}, 1),
 			toUnsubscribe: l.toUnsubscribe,
 			timeout:       time.NewTimer(0),
 			ctx:           ctx,
@@ -481,6 +488,8 @@ func (s *subscription) C() <-chan Event {
 func (s *subscription) Mask() EventType {
 	return s.mask
 }
+
+func (s *subscription) Overflow() <-chan struct{} { return s.overflow }
 
 func (s *subscription) Unsubscribe() {
 	select {
@@ -590,6 +599,8 @@ func (*noopLogger) SubscribeContext(ctx context.Context, _ EventType) (Subscript
 }
 
 type noopSubscription struct{}
+
+func (*noopSubscription) Overflow() <-chan struct{} { return nil }
 
 func (*noopSubscription) C() <-chan Event {
 	return nil

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -442,4 +443,29 @@ func BenchmarkLogEvent(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		l.Log(StateChanged, nil)
 	}
+}
+
+func TestOverflowSignalsTheFinalDroppedEvent(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		logger := NewLogger()
+		go logger.Serve(ctx)
+		sub, err := logger.SubscribeContext(ctx, DeviceConnected)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer sub.Unsubscribe()
+		for i := 0; i < BufferSize+1; i++ {
+			logger.Log(DeviceConnected, i)
+		}
+		<-sub.Overflow()
+		for range BufferSize {
+			<-sub.C()
+		}
+		logger.Log(DeviceConnected, "resumed")
+		if event := <-sub.C(); event.Data != "resumed" {
+			t.Fatalf("delivery after overflow: %v", event)
+		}
+	})
 }

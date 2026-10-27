@@ -120,7 +120,7 @@ try:
   for i in range(3):
    filename=f'repeat-{timeout}-{i}.md';content=f'a {i}\n';(root/'a/folder'/filename).write_text(content)
    wait_contents('b',filename,content)
-   # Deliberate 2 s spacing reproduces S4; it is the workload, not a wait for success.
+   # The receiving-side editor waits 2 s after transfer as part of the measured workload.
    time.sleep(2)
    at=time.time_ns();content=f'b {i}\n';(root/'b/folder'/filename).write_text(content);wait_contents('a',filename,content);samples.append((time.time_ns()-at)/1e9)
   print(json.dumps({'check':'watch_timeout','timeout_s':timeout,'reverse_edit_seconds':samples}),flush=True)

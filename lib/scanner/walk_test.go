@@ -826,7 +826,7 @@ func TestIssue4841(t *testing.T) {
 	}
 }
 
-// TestNotExistingError reproduces https://github.com/victorarias/syncthing/issues/5385
+// TestNotExistingError reproduces https://github.com/syncthing/syncthing/issues/5385
 func TestNotExistingError(t *testing.T) {
 	sub := "notExisting"
 	testFs := newTestFs()
@@ -882,7 +882,7 @@ func TestSkipIgnoredDirs(t *testing.T) {
 	}
 }
 
-// https://github.com/victorarias/syncthing/issues/6487
+// https://github.com/syncthing/syncthing/issues/6487
 func TestIncludedSubdir(t *testing.T) {
 	fss := fs.NewFilesystem(fs.FilesystemTypeFake, "")
 

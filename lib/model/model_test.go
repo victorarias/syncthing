@@ -1044,8 +1044,8 @@ func TestIssue4897(t *testing.T) {
 // TestIssue5063 is about a panic in connection with modifying config in quick
 // succession, related with auto accepted folders. It's unclear what exactly, a
 // relevant bit seems to be here:
-// PR-comments: https://github.com/victorarias/syncthing/pull/5069/files#r203146546
-// Issue: https://github.com/victorarias/syncthing/pull/5509
+// PR-comments: https://github.com/syncthing/syncthing/pull/5069/files#r203146546
+// Issue: https://github.com/syncthing/syncthing/pull/5509
 func TestIssue5063(t *testing.T) {
 	m, cancel := newState(t, defaultAutoAcceptCfg)
 	defer cleanupModel(m)
@@ -3669,7 +3669,7 @@ func testConfigChangeTriggersClusterConfigs(t *testing.T, expectFirst, expectSec
 // The end result of the tested scenario is that the global version entry has an
 // empty version vector and is not deleted, while everything is actually deleted.
 // That then causes these files to be considered as needed, while they are not.
-// https://github.com/victorarias/syncthing/issues/6961
+// https://github.com/syncthing/syncthing/issues/6961
 func TestIssue6961(t *testing.T) {
 	wcfg, fcfg := newDefaultCfgWrapper(t)
 	tfs := fcfg.Filesystem()

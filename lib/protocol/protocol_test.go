@@ -95,7 +95,7 @@ func TestClose(t *testing.T) {
 
 // TestCloseOnBlockingSend checks that the connection does not deadlock when
 // Close is called while the underlying connection is broken (send blocks).
-// https://github.com/victorarias/syncthing/pull/5442
+// https://github.com/syncthing/syncthing/pull/5442
 func TestCloseOnBlockingSend(t *testing.T) {
 	oldCloseTimeout := CloseTimeout
 	CloseTimeout = 100 * time.Millisecond
@@ -651,7 +651,7 @@ func TestRequestMaxSize(t *testing.T) {
 
 func TestRequestZeroSize(t *testing.T) {
 	// A zero-sized request should be accepted, since current versions of
-	// Syncthing send these. See https://github.com/victorarias/syncthing/issues/10709.
+	// Syncthing send these. See https://github.com/syncthing/syncthing/issues/10709.
 	m := newTestModel()
 	rw := testutil.NewBlockingRW()
 	c := getRawConnection(NewConnection(c0ID, rw, &testutil.NoopRW{}, testutil.NoopCloser{}, m, new(mockedConnectionInfo), CompressionAlways, testKeyGen))

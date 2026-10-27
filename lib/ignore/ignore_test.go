@@ -953,7 +953,7 @@ func TestIssue4901(t *testing.T) {
 }
 
 // TestIssue5009 checks that ignored dirs are only skipped if there are no include patterns.
-// https://github.com/victorarias/syncthing/issues/5009 (rc-only bug)
+// https://github.com/syncthing/syncthing/issues/5009 (rc-only bug)
 func TestIssue5009(t *testing.T) {
 	testFs := newTestFS()
 

@@ -152,7 +152,7 @@ func TestWatchRename(t *testing.T) {
 
 // TestWatchWinRoot checks that a watch at a drive letter does not panic due to
 // out of root event on every event.
-// https://github.com/victorarias/syncthing/issues/5695
+// https://github.com/syncthing/syncthing/issues/5695
 func TestWatchWinRoot(t *testing.T) {
 	if !build.IsWindows {
 		t.Skip("Windows specific test")

@@ -22,7 +22,7 @@ import (
 var (
 	testKeyGen = NewKeyGenerator()
 
-	// https://github.com/victorarias/syncthing/issues/8799
+	// https://github.com/syncthing/syncthing/issues/8799
 	cryptoIsBrokenUnderRaceDetector = (build.IsLinux || build.IsDarwin) && strings.HasPrefix(runtime.Version(), "go1.20")
 )
 

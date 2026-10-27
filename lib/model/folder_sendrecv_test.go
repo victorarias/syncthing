@@ -876,7 +876,7 @@ func TestDeleteBehindSymlink(t *testing.T) {
 	}
 }
 
-// Reproduces https://github.com/victorarias/syncthing/issues/6559
+// Reproduces https://github.com/syncthing/syncthing/issues/6559
 func TestPullCtxCancel(t *testing.T) {
 	_, f := setupSendReceiveFolder(t)
 

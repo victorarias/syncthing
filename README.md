@@ -2,8 +2,8 @@
 
 This repository is attn's embedded file synchronization engine. It started at
 Syncthing v2.1.6, commit `4461a1ce354d3990660966ad70176e00246adb61`.
-The `main` and `attn` branches contain the engine; attn pins `v0.1.6` with a plain
-`require github.com/victorarias/syncthing v0.1.6`.
+The `main` and `attn` branches contain the engine; attn pins `v0.1.7` with a plain
+`require github.com/victorarias/syncthing v0.1.7`.
 
 The embedder owns authentication and transport. The engine exchanges the file
 sync protocol over a `net.Conn` the embedder supplies. It opens no listener,
@@ -58,11 +58,12 @@ Use it to add or remove peers and folders, or change ignore patterns. The
 embedder stores configuration; the engine writes no config.xml.
 
 `Snapshot(folder, peer)` returns a completed full-scan flag, the local and
-received-peer sequences, outstanding items, deletions and bytes on both sides,
+received-peer sequences, outstanding items, deletions and bytes on this side,
 and current per-file errors. A completed scan can have file errors, so check
 those too. Exchange post-scan sequences with the peer, require each received
 sequence to reach the other side's advertised sequence, and require zero
-outstanding items and deletions with no errors before declaring first sync.
+outstanding items and deletions with no errors on each side before declaring first sync.
+Use the peer's own snapshot for its need counts.
 An empty folder has sequence zero after a completed scan.
 
 `FolderState` returns sync state, outstanding files and bytes, and the folder

@@ -29,7 +29,7 @@ import (
 	"github.com/victorarias/syncthing/lib/svcutil"
 )
 
-const Version = "v0.1.3"
+const Version = "v0.1.4"
 
 type Engine struct {
 	ID         protocol.DeviceID
@@ -132,6 +132,10 @@ func (e *Engine) Configure(cfg config.Configuration) error {
 
 func (e *Engine) Subscribe(mask events.EventType) events.Subscription {
 	return e.events.Subscribe(mask)
+}
+
+func (e *Engine) SubscribeContext(ctx context.Context, mask events.EventType) (events.Subscription, error) {
+	return e.events.SubscribeContext(ctx, mask)
 }
 
 type FolderState struct {

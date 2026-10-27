@@ -9,6 +9,7 @@ package attnsync_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -307,5 +308,35 @@ func TestSnapshotDistinguishesAnEmptyScanFromAnUnknownFolderAndKeepsErrorsCurren
 	repaired := await(func(s attnsync.FolderSnapshot) bool { return s.ScanComplete && s.State == "idle" && len(s.Errors) == 0 })
 	if repaired.Error != nil || repaired.LocalSequence == 0 {
 		t.Fatalf("repaired scan: %+v", repaired)
+	}
+}
+
+func TestSubscriptionCancellationBeforeServeAndAfterShutdown(t *testing.T) {
+	id := protocol.NewDeviceID([]byte("subscription-cancellation"))
+	cfg, _ := configuration(t, id, protocol.NewDeviceID([]byte("peer")))
+	engine, err := attnsync.New(t.TempDir(), cfg, id, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if sub, err := engine.SubscribeContext(ctx, events.AllEvents); sub != nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("before Serve: %v, %v", sub, err)
+	}
+	serving, stop := context.WithCancel(context.Background())
+	ended := make(chan error, 1)
+	go func() { ended <- engine.Serve(serving) }()
+	<-engine.Ready()
+	sub, err := engine.SubscribeContext(serving, events.AllEvents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop()
+	if err := <-ended; err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	sub.Unsubscribe()
+	if sub, err := engine.SubscribeContext(serving, events.AllEvents); sub != nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("after shutdown: %v, %v", sub, err)
 	}
 }

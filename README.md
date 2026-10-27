@@ -2,8 +2,8 @@
 
 This repository is attn's embedded file synchronization engine. It started at
 Syncthing v2.1.6, commit `4461a1ce354d3990660966ad70176e00246adb61`.
-The `main` and `attn` branches contain the engine; attn pins `v0.1.3` with a plain
-`require github.com/victorarias/syncthing v0.1.3`.
+The `main` and `attn` branches contain the engine; attn pins `v0.1.4` with a plain
+`require github.com/victorarias/syncthing v0.1.4`.
 
 The embedder owns authentication and transport. The engine exchanges the file
 sync protocol over a `net.Conn` the embedder supplies. It opens no listener,
@@ -24,7 +24,10 @@ stopped := make(chan error, 1)
 go func() { stopped <- engine.Serve(ctx) }()
 <-engine.Ready()
 
-subscription := engine.Subscribe(events.AllEvents)
+subscription, err := engine.SubscribeContext(ctx, events.AllEvents)
+if err != nil {
+    return err
+}
 defer subscription.Unsubscribe()
 // Drain subscription.C() for this engine's lifetime.
 
@@ -63,7 +66,7 @@ outstanding items and deletions with no errors before declaring first sync.
 An empty folder has sequence zero after a completed scan.
 
 `FolderState` returns sync state, outstanding files and bytes, and the folder
-health error. It omits per-file errors; use `Snapshot` for complete health. `Completion` reports a peer's progress. `Subscribe` exposes the engine's
+health error. It omits per-file errors; use `Snapshot` for complete health. `Completion` reports a peer's progress. `SubscribeContext` allows cancellation while subscribing and exposes the engine's
 events, including state, index updates, file changes and disconnects.
 `IsConflict` identifies `*.sync-conflict-*` file names from those events. The
 embedder owns conflict counts and notifications.

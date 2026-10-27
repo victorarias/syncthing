@@ -239,6 +239,7 @@ type Logger interface {
 	suture.Service
 	Log(t EventType, data any)
 	Subscribe(mask EventType) Subscription
+	SubscribeContext(ctx context.Context, mask EventType) (Subscription, error)
 }
 
 type logger struct {
@@ -373,8 +374,13 @@ func (l *logger) sendEvent(e Event) {
 }
 
 func (l *logger) Subscribe(mask EventType) Subscription {
-	res := make(chan Subscription)
-	l.funcs <- func(ctx context.Context) {
+	sub, _ := l.SubscribeContext(context.Background(), mask)
+	return sub
+}
+
+func (l *logger) SubscribeContext(ctx context.Context, mask EventType) (Subscription, error) {
+	res := make(chan Subscription, 1)
+	create := func(ctx context.Context) {
 		slogutil.Adapter(l.sl).Debugln("subscribe", mask)
 
 		s := &subscription{
@@ -404,7 +410,12 @@ func (l *logger) Subscribe(mask EventType) Subscription {
 		l.nextSubscriptionIDs = append(l.nextSubscriptionIDs, 1)
 		res <- s
 	}
-	return <-res
+	select {
+	case l.funcs <- create:
+		return <-res, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func (l *logger) unsubscribe(s *subscription) {
@@ -569,6 +580,13 @@ func (*noopLogger) Log(_ EventType, _ any) {}
 
 func (*noopLogger) Subscribe(_ EventType) Subscription {
 	return &noopSubscription{}
+}
+
+func (*noopLogger) SubscribeContext(ctx context.Context, _ EventType) (Subscription, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return &noopSubscription{}, nil
 }
 
 type noopSubscription struct{}

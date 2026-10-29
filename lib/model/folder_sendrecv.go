@@ -176,10 +176,10 @@ func (f *sendReceiveFolder) pull(ctx context.Context) (bool, error) {
 		close(scanChan)
 	}()
 
-	metricFolderPulls.WithLabelValues(f.ID).Inc()
+	metricFolderPulls().WithLabelValues(f.ID).Inc()
 	pullCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	go addTimeUntilCancelled(pullCtx, metricFolderPullSeconds.WithLabelValues(f.ID))
+	go addTimeUntilCancelled(pullCtx, metricFolderPullSeconds().WithLabelValues(f.ID))
 
 	changed := 0
 
@@ -1893,7 +1893,7 @@ func (f *sendReceiveFolder) moveForConflict(name, lastModBy string, scanChan cha
 		return nil
 	}
 
-	metricFolderConflictsTotal.WithLabelValues(f.ID).Inc()
+	metricFolderConflictsTotal().WithLabelValues(f.ID).Inc()
 	newName := conflictName(name, lastModBy)
 	err := f.mtimefs.Rename(name, newName)
 	if fs.IsNotExist(err) {

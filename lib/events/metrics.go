@@ -7,16 +7,20 @@
 package events
 
 import (
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-var metricEvents = promauto.NewCounterVec(prometheus.CounterOpts{
-	Namespace: "syncthing",
-	Subsystem: "events",
-	Name:      "total",
-	Help:      "Total number of created/forwarded/dropped events",
-}, []string{"event", "state"})
+var metricEvents = sync.OnceValue(func() *prometheus.CounterVec {
+	return promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "syncthing",
+		Subsystem: "events",
+		Name:      "total",
+		Help:      "Total number of created/forwarded/dropped events",
+	}, []string{"event", "state"})
+})
 
 const (
 	metricEventStateCreated   = "created"

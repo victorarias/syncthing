@@ -39,8 +39,8 @@ err = engine.ServeConn(bridgeContext, conn, peerID)
 the engine until cancellation and closes its database before returning. Run it
 once per engine. `Ready` signals model initialization. Use `Snapshot` after engine events to assess folder convergence.
 Initial idle and 100% completion alone do not prove first sync. Each engine routes logs to its
-supplied `*slog.Logger`. Nil means discard. Importing the module leaves the process's default logger and
-HTTP transport alone.
+supplied `*slog.Logger`. Nil means discard. Importing the module starts no background goroutines and registers no engine
+metrics. It leaves the process's default logger and HTTP transport alone.
 
 Create the folder marker yourself, once when initializing a folder. The default
 marker is `.attn/notebook-sync`. The engine checks its presence and does not

@@ -485,10 +485,10 @@ func (f *folder) scanSubdirs(ctx context.Context, subDirs []string) error {
 	}
 	defer f.ioLimiter.Give(1)
 
-	metricFolderScans.WithLabelValues(f.ID).Inc()
+	metricFolderScans().WithLabelValues(f.ID).Inc()
 	scanCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	go addTimeUntilCancelled(scanCtx, metricFolderScanSeconds.WithLabelValues(f.ID))
+	go addTimeUntilCancelled(scanCtx, metricFolderScanSeconds().WithLabelValues(f.ID))
 
 	for i := range subDirs {
 		sub := osutil.NativeFilename(subDirs[i])

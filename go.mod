@@ -14,7 +14,6 @@ require (
 	github.com/prometheus/client_golang v1.24.1
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/shirou/gopsutil/v4 v4.26.7
-	github.com/syncthing/notify v0.0.0-20250528144937-c7027d4f7465
 	github.com/thejerf/suture/v4 v4.0.6
 	github.com/wlynxg/anet v0.0.5
 	golang.org/x/crypto v0.55.0

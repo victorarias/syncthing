@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -133,13 +134,13 @@ func (c GUIConfiguration) URL() string {
 }
 
 // matches a bcrypt hash and not too much else
-var bcryptExpr = regexp.MustCompile(`^\$2[aby]\$\d+\$.{50,}`)
+var bcryptExpr = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^\$2[aby]\$\d+\$.{50,}`) })
 
 // SetPassword takes a bcrypt hash or a plaintext password and stores it.
 // Plaintext passwords are hashed. Returns an error if the password is not
 // valid.
 func (c *GUIConfiguration) SetPassword(password string) error {
-	if bcryptExpr.MatchString(password) {
+	if bcryptExpr().MatchString(password) {
 		// Already hashed
 		c.Password = password
 		return nil

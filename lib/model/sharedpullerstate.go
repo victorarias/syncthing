@@ -279,11 +279,11 @@ func (s *sharedPullerState) copiedFromOrigin(bytes int) {
 	s.copyOrigin++
 	s.updated = time.Now()
 	s.mut.Unlock()
-	metricFolderProcessedBytesTotal.WithLabelValues(s.folder, metricSourceLocalOrigin).Add(float64(bytes))
+	metricFolderProcessedBytesTotal().WithLabelValues(s.folder, metricSourceLocalOrigin).Add(float64(bytes))
 }
 
 func (s *sharedPullerState) copiedFromElsewhere(bytes int) {
-	metricFolderProcessedBytesTotal.WithLabelValues(s.folder, metricSourceLocalOther).Add(float64(bytes))
+	metricFolderProcessedBytesTotal().WithLabelValues(s.folder, metricSourceLocalOther).Add(float64(bytes))
 }
 
 func (s *sharedPullerState) skippedSparseBlock(bytes int) {
@@ -292,7 +292,7 @@ func (s *sharedPullerState) skippedSparseBlock(bytes int) {
 	s.copyOrigin++
 	s.updated = time.Now()
 	s.mut.Unlock()
-	metricFolderProcessedBytesTotal.WithLabelValues(s.folder, metricSourceSkipped).Add(float64(bytes))
+	metricFolderProcessedBytesTotal().WithLabelValues(s.folder, metricSourceSkipped).Add(float64(bytes))
 }
 
 func (s *sharedPullerState) pullStarted() {
@@ -314,7 +314,7 @@ func (s *sharedPullerState) pullDone(block protocol.BlockInfo) {
 	s.availableUpdated = time.Now()
 	slogutil.Adapter(s.sl).Debugln("sharedPullerState", s.folder, s.file.Name, "pullNeeded done ->", s.pullNeeded)
 	s.mut.Unlock()
-	metricFolderProcessedBytesTotal.WithLabelValues(s.folder, metricSourceNetwork).Add(float64(block.Size))
+	metricFolderProcessedBytesTotal().WithLabelValues(s.folder, metricSourceNetwork).Add(float64(block.Size))
 }
 
 // finalClose atomically closes and returns closed status of a file. A true

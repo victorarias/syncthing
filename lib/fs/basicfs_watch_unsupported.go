@@ -10,6 +10,8 @@ package fs
 
 import "context"
 
+func prepareWatch() {}
+
 func (f *BasicFilesystem) Watch(name string, ignore Matcher, ctx context.Context, ignorePerms bool) (<-chan Event, <-chan error, error) {
 	return nil, nil, ErrWatchNotSupported
 }

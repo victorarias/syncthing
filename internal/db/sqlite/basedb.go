@@ -87,7 +87,7 @@ func openBase(path string, maxOpenConns, maxIdleConns int, pragmas, schemaScript
 			"FlagLocalNeeded":        protocol.FlagLocalNeeded,
 			"FlagLocalRemoteInvalid": protocol.FlagLocalRemoteInvalid,
 			"LocalInvalidFlags":      protocol.LocalInvalidFlags,
-			"SyncthingVersion":       build.LongVersion,
+			"SyncthingVersion":       build.LongVersion(),
 		},
 	}
 
@@ -344,7 +344,7 @@ func (s *baseDB) setAppliedSchemaVersion(tx *sqlx.Tx, ver int) error {
 	_, err := tx.Exec(`
 		INSERT OR IGNORE INTO schemamigrations (schema_version, applied_at, syncthing_version)
 		VALUES (?, ?, ?)
-	`, ver, time.Now().UnixNano(), build.LongVersion)
+	`, ver, time.Now().UnixNano(), build.LongVersion())
 	return wrap(err)
 }
 

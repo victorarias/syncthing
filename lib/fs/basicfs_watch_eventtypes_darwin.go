@@ -8,7 +8,7 @@
 
 package fs
 
-import "github.com/syncthing/notify"
+import "github.com/victorarias/syncthing/internal/notify"
 
 const (
 	subEventMask = notify.Create | notify.Remove | notify.Write | notify.Rename | notify.FSEventsInodeMetaMod | notify.FSEventsXattrMod

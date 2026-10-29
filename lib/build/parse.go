@@ -10,15 +10,18 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // syncthing v1.1.4-rc.1+30-g6aaae618-dirty-crashrep "Erbium Earthworm" (go1.12.5 darwin-amd64) jb@kvin.kastelo.net 2019-05-23 16:08:14 UTC [foo, bar]
 // or, somewhere along the way the "+" in the version tag disappeared:
 // syncthing v1.23.7-dev.26.gdf7b56ae.dirty-stversionextra "Fermium Flea" (go1.20.5 darwin-arm64) jb@ok.kastelo.net 2023-07-12 06:55:26 UTC [Some Wrapper, purego, stnoupgrade]
 var (
-	longVersionRE = regexp.MustCompile(`syncthing\s+(v[^\s]+)\s+"([^"]+)"\s\(([^\s]+)\s+([^-]+)-([^)]+)\)\s+([^\s]+)[^\[]*(?:\[(.+)\])?`)
-	gitExtraRE    = regexp.MustCompile(`\.\d+\.g[0-9a-f]+`) // ".1.g6aaae618"
-	gitExtraSepRE = regexp.MustCompile(`[.-]`)              // dot or dash
+	longVersionRE = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`syncthing\s+(v[^\s]+)\s+"([^"]+)"\s\(([^\s]+)\s+([^-]+)-([^)]+)\)\s+([^\s]+)[^\[]*(?:\[(.+)\])?`)
+	})
+	gitExtraRE    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\.\d+\.g[0-9a-f]+`) }) // ".1.g6aaae618"
+	gitExtraSepRE = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`[.-]`) })              // dot or dash
 )
 
 type VersionParts struct {
@@ -47,7 +50,7 @@ func (v VersionParts) Environment() string {
 }
 
 func ParseVersion(line string) (VersionParts, error) {
-	m := longVersionRE.FindStringSubmatch(line)
+	m := longVersionRE().FindStringSubmatch(line)
 	if len(m) == 0 {
 		return VersionParts{}, errors.New("unintelligible version string")
 	}
@@ -68,14 +71,14 @@ func ParseVersion(line string) (VersionParts, error) {
 	if strings.Contains(v.Version, "+") {
 		parts = strings.Split(v.Version, "+")
 	} else {
-		idxs := gitExtraRE.FindStringIndex(v.Version)
+		idxs := gitExtraRE().FindStringIndex(v.Version)
 		if len(idxs) > 0 {
 			parts = []string{v.Version[:idxs[0]], v.Version[idxs[0]+1:]}
 		}
 	}
 	v.Tag = parts[0]
 	if len(parts) > 1 {
-		fields := gitExtraSepRE.Split(parts[1], -1)
+		fields := gitExtraSepRE().Split(parts[1], -1)
 		if len(fields) >= 2 && strings.HasPrefix(fields[1], "g") {
 			v.Commit = fields[1][1:]
 		}

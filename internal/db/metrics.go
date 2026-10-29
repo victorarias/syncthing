@@ -8,6 +8,7 @@ package db
 
 import (
 	"iter"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -17,30 +18,38 @@ import (
 )
 
 var (
-	metricCurrentOperations = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "syncthing",
-		Subsystem: "db",
-		Name:      "operations_current",
-		Help:      "Number of database operations currently ongoing, per folder and operation",
-	}, []string{"folder", "operation"})
-	metricTotalOperationSeconds = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "syncthing",
-		Subsystem: "db",
-		Name:      "operation_seconds_total",
-		Help:      "Total time spent in database operations, per folder and operation",
-	}, []string{"folder", "operation"})
-	metricTotalOperationsCount = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "syncthing",
-		Subsystem: "db",
-		Name:      "operations_total",
-		Help:      "Total number of database operations, per folder and operation",
-	}, []string{"folder", "operation"})
-	metricTotalFilesUpdatedCount = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "syncthing",
-		Subsystem: "db",
-		Name:      "files_updated_total",
-		Help:      "Total number of files updated",
-	}, []string{"folder"})
+	metricCurrentOperations = sync.OnceValue(func() *prometheus.GaugeVec {
+		return promauto.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: "syncthing",
+			Subsystem: "db",
+			Name:      "operations_current",
+			Help:      "Number of database operations currently ongoing, per folder and operation",
+		}, []string{"folder", "operation"})
+	})
+	metricTotalOperationSeconds = sync.OnceValue(func() *prometheus.CounterVec {
+		return promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "syncthing",
+			Subsystem: "db",
+			Name:      "operation_seconds_total",
+			Help:      "Total time spent in database operations, per folder and operation",
+		}, []string{"folder", "operation"})
+	})
+	metricTotalOperationsCount = sync.OnceValue(func() *prometheus.CounterVec {
+		return promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "syncthing",
+			Subsystem: "db",
+			Name:      "operations_total",
+			Help:      "Total number of database operations, per folder and operation",
+		}, []string{"folder", "operation"})
+	})
+	metricTotalFilesUpdatedCount = sync.OnceValue(func() *prometheus.CounterVec {
+		return promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "syncthing",
+			Subsystem: "db",
+			Name:      "files_updated_total",
+			Help:      "Total number of files updated",
+		}, []string{"folder"})
+	})
 )
 
 func MetricsWrap(db DB) DB {
@@ -53,13 +62,13 @@ type metricsDB struct {
 
 func (m metricsDB) account(folder, op string) func() {
 	t0 := time.Now()
-	metricCurrentOperations.WithLabelValues(folder, op).Inc()
+	metricCurrentOperations().WithLabelValues(folder, op).Inc()
 	return func() {
 		if dur := time.Since(t0).Seconds(); dur > 0 {
-			metricTotalOperationSeconds.WithLabelValues(folder, op).Add(dur)
+			metricTotalOperationSeconds().WithLabelValues(folder, op).Add(dur)
 		}
-		metricTotalOperationsCount.WithLabelValues(folder, op).Inc()
-		metricCurrentOperations.WithLabelValues(folder, op).Dec()
+		metricTotalOperationsCount().WithLabelValues(folder, op).Inc()
+		metricCurrentOperations().WithLabelValues(folder, op).Dec()
 	}
 }
 
@@ -205,7 +214,7 @@ func (m metricsDB) SetIndexID(folder string, device protocol.DeviceID, id protoc
 
 func (m metricsDB) Update(folder string, device protocol.DeviceID, fs []protocol.FileInfo, opts ...UpdateOption) error {
 	defer m.account(folder, "Update")()
-	defer metricTotalFilesUpdatedCount.WithLabelValues(folder).Add(float64(len(fs)))
+	defer metricTotalFilesUpdatedCount().WithLabelValues(folder).Add(float64(len(fs)))
 	return m.DB.Update(folder, device, fs, opts...)
 }
 

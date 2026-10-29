@@ -7,29 +7,35 @@
 package scanner
 
 import (
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 var (
-	metricHashedBytes = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "syncthing",
-		Subsystem: "scanner",
-		Name:      "hashed_bytes_total",
-		Help:      "Total amount of data hashed, per folder",
-	}, []string{"folder"})
+	metricHashedBytes = sync.OnceValue(func() *prometheus.CounterVec {
+		return promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "syncthing",
+			Subsystem: "scanner",
+			Name:      "hashed_bytes_total",
+			Help:      "Total amount of data hashed, per folder",
+		}, []string{"folder"})
+	})
 
-	metricScannedItems = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "syncthing",
-		Subsystem: "scanner",
-		Name:      "scanned_items_total",
-		Help:      "Total number of items (files/directories) inspected, per folder",
-	}, []string{"folder"})
+	metricScannedItems = sync.OnceValue(func() *prometheus.CounterVec {
+		return promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "syncthing",
+			Subsystem: "scanner",
+			Name:      "scanned_items_total",
+			Help:      "Total number of items (files/directories) inspected, per folder",
+		}, []string{"folder"})
+	})
 )
 
 func registerFolderMetrics(folderID string) {
 	// Register metrics for this folder, so that counters are present even
 	// when zero.
-	metricHashedBytes.WithLabelValues(folderID)
-	metricScannedItems.WithLabelValues(folderID)
+	metricHashedBytes().WithLabelValues(folderID)
+	metricScannedItems().WithLabelValues(folderID)
 }

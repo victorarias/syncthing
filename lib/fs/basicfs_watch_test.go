@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syncthing/notify"
+	"github.com/victorarias/syncthing/internal/notify"
 	"github.com/victorarias/syncthing/lib/build"
 	"github.com/victorarias/syncthing/lib/ignore/ignoreresult"
 )

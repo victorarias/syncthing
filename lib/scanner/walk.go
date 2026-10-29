@@ -297,7 +297,7 @@ func (w *walker) walkAndHashFiles(ctx context.Context, toHashChan chan<- protoco
 		default:
 		}
 
-		metricScannedItems.WithLabelValues(w.Folder).Inc()
+		metricScannedItems().WithLabelValues(w.Folder).Inc()
 
 		// Return value used when we are returning early and don't want to
 		// process the item. For directories, this means do-not-descend.

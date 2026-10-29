@@ -446,7 +446,7 @@ func (c *rawConnection) dispatcherLoop() (err error) {
 			return ErrClosed
 		}
 
-		metricDeviceRecvMessages.WithLabelValues(c.idString).Inc()
+		metricDeviceRecvMessages().WithLabelValues(c.idString).Inc()
 
 		msgContext, err := messageContext(msg)
 		if err != nil {
@@ -565,7 +565,7 @@ func (c *rawConnection) readMessageAfterHeader(hdr *bep.Header, fourByteBuf []by
 
 	// ... and is then unmarshalled
 
-	metricDeviceRecvDecompressedBytes.WithLabelValues(c.idString).Add(float64(4 + len(buf)))
+	metricDeviceRecvDecompressedBytes().WithLabelValues(c.idString).Add(float64(4 + len(buf)))
 
 	msg, err := newMessage(hdr.Type)
 	if err != nil {
@@ -604,7 +604,7 @@ func (c *rawConnection) readHeader(fourByteBuf []byte) (*bep.Header, error) {
 		return nil, fmt.Errorf("unmarshalling header: %w", err)
 	}
 
-	metricDeviceRecvDecompressedBytes.WithLabelValues(c.idString).Add(float64(2 + len(buf)))
+	metricDeviceRecvDecompressedBytes().WithLabelValues(c.idString).Add(float64(2 + len(buf)))
 
 	return &hdr, nil
 }
@@ -793,7 +793,7 @@ func (c *rawConnection) writeMessage(msg proto.Message) error {
 	slogutil.Adapter(c.sl).Debugf("Writing %v", msgContext)
 
 	defer func() {
-		metricDeviceSentMessages.WithLabelValues(c.idString).Inc()
+		metricDeviceSentMessages().WithLabelValues(c.idString).Inc()
 	}()
 
 	size := proto.Size(msg)
@@ -822,7 +822,7 @@ func (c *rawConnection) writeMessage(msg proto.Message) error {
 		}
 	}
 
-	metricDeviceSentUncompressedBytes.WithLabelValues(c.idString).Add(float64(totSize))
+	metricDeviceSentUncompressedBytes().WithLabelValues(c.idString).Add(float64(totSize))
 
 	// Header length
 	binary.BigEndian.PutUint16(buf, uint16(hdrSize))
@@ -858,7 +858,7 @@ func (c *rawConnection) writeCompressedMessage(msg proto.Message, marshaled []by
 
 	cOverhead := 2 + hdrSize + 4
 
-	metricDeviceSentUncompressedBytes.WithLabelValues(c.idString).Add(float64(cOverhead + len(marshaled)))
+	metricDeviceSentUncompressedBytes().WithLabelValues(c.idString).Add(float64(cOverhead + len(marshaled)))
 
 	// The compressed size may be at most n-n/32 = .96875*n bytes,
 	// I.e., if we can't save at least 3.125% bandwidth, we forgo compression.

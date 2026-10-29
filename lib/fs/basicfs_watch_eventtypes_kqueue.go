@@ -8,7 +8,7 @@
 
 package fs
 
-import "github.com/syncthing/notify"
+import "github.com/victorarias/syncthing/internal/notify"
 
 const (
 	// Platform independent notify.Create is required, as kqueue does not have

@@ -66,6 +66,7 @@ func init() {
 }
 
 func newBasicFilesystem(root string, opts ...Option) *BasicFilesystem {
+	prepareWatch()
 	if root == "" {
 		root = "." // Otherwise "" becomes "/" below
 	}

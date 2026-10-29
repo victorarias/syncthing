@@ -11,7 +11,7 @@
 
 package fs
 
-import "github.com/syncthing/notify"
+import "github.com/victorarias/syncthing/internal/notify"
 
 const (
 	subEventMask  = notify.All

@@ -7,63 +7,81 @@
 package model
 
 import (
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 var (
-	metricFolderState = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "syncthing",
-		Subsystem: "model",
-		Name:      "folder_state",
-		Help:      "Current folder state",
-	}, []string{"folder"})
-	metricFolderSummary = promauto.NewGaugeVec(prometheus.GaugeOpts{ //nolint:promlinter
-		Namespace: "syncthing",
-		Subsystem: "model",
-		Name:      "folder_summary",
-		Help:      "Current folder summary data (counts for global/local/need files/directories/symlinks/deleted/bytes)",
-	}, []string{"folder", "scope", "type"})
+	metricFolderState = sync.OnceValue(func() *prometheus.GaugeVec {
+		return promauto.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: "syncthing",
+			Subsystem: "model",
+			Name:      "folder_state",
+			Help:      "Current folder state",
+		}, []string{"folder"})
+	})
+	metricFolderSummary = sync.OnceValue(func() *prometheus.GaugeVec {
+		return promauto.NewGaugeVec(prometheus.GaugeOpts{ //nolint:promlinter
+			Namespace: "syncthing",
+			Subsystem: "model",
+			Name:      "folder_summary",
+			Help:      "Current folder summary data (counts for global/local/need files/directories/symlinks/deleted/bytes)",
+		}, []string{"folder", "scope", "type"})
+	})
 
-	metricFolderPulls = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "syncthing",
-		Subsystem: "model",
-		Name:      "folder_pulls_total",
-		Help:      "Total number of folder pull iterations, per folder ID",
-	}, []string{"folder"})
-	metricFolderPullSeconds = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "syncthing",
-		Subsystem: "model",
-		Name:      "folder_pull_seconds_total",
-		Help:      "Total time spent in folder pull iterations, per folder ID",
-	}, []string{"folder"})
+	metricFolderPulls = sync.OnceValue(func() *prometheus.CounterVec {
+		return promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "syncthing",
+			Subsystem: "model",
+			Name:      "folder_pulls_total",
+			Help:      "Total number of folder pull iterations, per folder ID",
+		}, []string{"folder"})
+	})
+	metricFolderPullSeconds = sync.OnceValue(func() *prometheus.CounterVec {
+		return promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "syncthing",
+			Subsystem: "model",
+			Name:      "folder_pull_seconds_total",
+			Help:      "Total time spent in folder pull iterations, per folder ID",
+		}, []string{"folder"})
+	})
 
-	metricFolderScans = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "syncthing",
-		Subsystem: "model",
-		Name:      "folder_scans_total",
-		Help:      "Total number of folder scan iterations, per folder ID",
-	}, []string{"folder"})
-	metricFolderScanSeconds = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "syncthing",
-		Subsystem: "model",
-		Name:      "folder_scan_seconds_total",
-		Help:      "Total time spent in folder scan iterations, per folder ID",
-	}, []string{"folder"})
+	metricFolderScans = sync.OnceValue(func() *prometheus.CounterVec {
+		return promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "syncthing",
+			Subsystem: "model",
+			Name:      "folder_scans_total",
+			Help:      "Total number of folder scan iterations, per folder ID",
+		}, []string{"folder"})
+	})
+	metricFolderScanSeconds = sync.OnceValue(func() *prometheus.CounterVec {
+		return promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "syncthing",
+			Subsystem: "model",
+			Name:      "folder_scan_seconds_total",
+			Help:      "Total time spent in folder scan iterations, per folder ID",
+		}, []string{"folder"})
+	})
 
-	metricFolderProcessedBytesTotal = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "syncthing",
-		Subsystem: "model",
-		Name:      "folder_processed_bytes_total",
-		Help:      "Total amount of data processed during folder syncing, per folder ID and data source (network/local_origin/local_other/skipped)",
-	}, []string{"folder", "source"})
+	metricFolderProcessedBytesTotal = sync.OnceValue(func() *prometheus.CounterVec {
+		return promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "syncthing",
+			Subsystem: "model",
+			Name:      "folder_processed_bytes_total",
+			Help:      "Total amount of data processed during folder syncing, per folder ID and data source (network/local_origin/local_other/skipped)",
+		}, []string{"folder", "source"})
+	})
 
-	metricFolderConflictsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "syncthing",
-		Subsystem: "model",
-		Name:      "folder_conflicts_total",
-		Help:      "Total number of conflicts",
-	}, []string{"folder"})
+	metricFolderConflictsTotal = sync.OnceValue(func() *prometheus.CounterVec {
+		return promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "syncthing",
+			Subsystem: "model",
+			Name:      "folder_conflicts_total",
+			Help:      "Total number of conflicts",
+		}, []string{"folder"})
+	})
 )
 
 const (
@@ -86,14 +104,14 @@ const (
 func registerFolderMetrics(folderID string) {
 	// Register metrics for this folder, so that counters are present even
 	// when zero.
-	metricFolderState.WithLabelValues(folderID)
-	metricFolderPulls.WithLabelValues(folderID)
-	metricFolderPullSeconds.WithLabelValues(folderID)
-	metricFolderScans.WithLabelValues(folderID)
-	metricFolderScanSeconds.WithLabelValues(folderID)
-	metricFolderProcessedBytesTotal.WithLabelValues(folderID, metricSourceNetwork)
-	metricFolderProcessedBytesTotal.WithLabelValues(folderID, metricSourceLocalOrigin)
-	metricFolderProcessedBytesTotal.WithLabelValues(folderID, metricSourceLocalOther)
-	metricFolderProcessedBytesTotal.WithLabelValues(folderID, metricSourceSkipped)
-	metricFolderConflictsTotal.WithLabelValues(folderID)
+	metricFolderState().WithLabelValues(folderID)
+	metricFolderPulls().WithLabelValues(folderID)
+	metricFolderPullSeconds().WithLabelValues(folderID)
+	metricFolderScans().WithLabelValues(folderID)
+	metricFolderScanSeconds().WithLabelValues(folderID)
+	metricFolderProcessedBytesTotal().WithLabelValues(folderID, metricSourceNetwork)
+	metricFolderProcessedBytesTotal().WithLabelValues(folderID, metricSourceLocalOrigin)
+	metricFolderProcessedBytesTotal().WithLabelValues(folderID, metricSourceLocalOther)
+	metricFolderProcessedBytesTotal().WithLabelValues(folderID, metricSourceSkipped)
+	metricFolderConflictsTotal().WithLabelValues(folderID)
 }

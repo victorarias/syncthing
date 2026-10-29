@@ -8,7 +8,7 @@
 
 package fs
 
-import "github.com/syncthing/notify"
+import "github.com/victorarias/syncthing/internal/notify"
 
 // notify.InAttrib is not only required for permissions, but also mod. time changes
 const (

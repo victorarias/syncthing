@@ -15,18 +15,21 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-var buildInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
-	Namespace: "syncthing",
-	Subsystem: "build",
-	Name:      "info",
-	Help:      "A metric with a constant '1' value labeled by version information from when the binary was built.",
-}, []string{"program", "version", "codename", "goversion", "builduser", "builddate", "tags"})
+var buildInfo = sync.OnceValue(func() *prometheus.GaugeVec {
+	return promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "syncthing",
+		Subsystem: "build",
+		Name:      "info",
+		Help:      "A metric with a constant '1' value labeled by version information from when the binary was built.",
+	}, []string{"program", "version", "codename", "goversion", "builduser", "builddate", "tags"})
+})
 
 const Codename = "Hafnium Hornet"
 
@@ -41,15 +44,15 @@ var (
 	// Added to by other packages
 	extraTags []string
 
-	// Set by init()
 	Date        time.Time
 	IsRelease   bool
 	IsCandidate bool
 	IsBeta      bool
-	LongVersion string
 	Extra       string
 
-	allowedVersionExp = regexp.MustCompile(`^v\d+\.\d+\.\d+(-[a-z0-9]+)*(\.\d+)*(\+\d+-g[0-9a-f]+|\+[0-9a-z]+)?(-[^\s]+)?$`)
+	allowedVersionExp = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^v\d+\.\d+\.\d+(-[a-z0-9]+)*(\.\d+)*(\+\d+-g[0-9a-f]+|\+[0-9a-z]+)?(-[^\s]+)?$`)
+	})
 
 	envTags = []string{
 		"STGUIASSETS",
@@ -66,15 +69,15 @@ var (
 
 const versionExtraAllowedChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-. "
 
-func init() {
+var initBuildData = sync.OnceFunc(func() {
 	if Version != "unknown-dev" {
 		// If not a generic dev build, version string should come from git describe
-		if !allowedVersionExp.MatchString(Version) {
-			log.Fatalf("Invalid version string %q;\n\tdoes not match regexp %v", Version, allowedVersionExp)
+		if !allowedVersionExp().MatchString(Version) {
+			log.Fatalf("Invalid version string %q;\n\tdoes not match regexp %v", Version, allowedVersionExp())
 		}
 	}
 	setBuildData()
-}
+})
 
 func setBuildData() {
 	// Check for a clean release build. A release is something like
@@ -99,11 +102,13 @@ func setBuildData() {
 
 	stamp, _ := strconv.Atoi(Stamp)
 	Date = time.Unix(int64(stamp), 0)
-	LongVersion = LongVersionFor("syncthing")
 }
+
+func LongVersion() string { return LongVersionFor("syncthing") }
 
 // LongVersionFor returns the long version string for the given program name.
 func LongVersionFor(program string) string {
+	initBuildData()
 	// This string and date format is essentially part of our external API. Never change it.
 	date := Date.UTC().Format("2006-01-02 15:04:05 MST")
 	v := fmt.Sprintf(`%s %s "%s" (%s %s-%s) %s@%s %s`, program, Version, Codename, runtime.Version(), runtime.GOOS, runtime.GOARCH, User, Host, date)
@@ -113,8 +118,8 @@ func LongVersionFor(program string) string {
 		v = fmt.Sprintf("%s [%s]", v, strings.Join(tags, ", "))
 	}
 
-	buildInfo.Reset()
-	buildInfo.With(prometheus.Labels{
+	buildInfo().Reset()
+	buildInfo().With(prometheus.Labels{
 		"program":   program,
 		"version":   Version,
 		"codename":  Codename,
@@ -132,6 +137,7 @@ func UserAgent() string {
 }
 
 func TagsList() []string {
+	initBuildData()
 	tags := strings.Split(Tags, ",")
 	if len(tags) == 1 && tags[0] == "" {
 		tags = tags[:0]
@@ -179,5 +185,4 @@ func filterString(s, allowedChars string) string {
 
 func AddTag(tag string) {
 	extraTags = append(extraTags, tag)
-	LongVersion = LongVersionFor("syncthing")
 }

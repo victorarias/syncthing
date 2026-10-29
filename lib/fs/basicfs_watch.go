@@ -16,7 +16,7 @@ import (
 	"errors"
 	"unicode/utf8"
 
-	"github.com/syncthing/notify"
+	"github.com/victorarias/syncthing/internal/notify"
 	"github.com/victorarias/syncthing/internal/slogutil"
 )
 
@@ -24,6 +24,8 @@ import (
 // The actual number is magic.
 // Not meant to be changed, but must be changeable for tests
 var backendBuffer = 500
+
+func prepareWatch() { notify.Prepare() }
 
 func (f *BasicFilesystem) Watch(name string, ignore Matcher, ctx context.Context, ignorePerms bool) (<-chan Event, <-chan error, error) {
 	watchPath, roots, err := f.watchPaths(name)

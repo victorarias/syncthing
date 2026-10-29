@@ -8,6 +8,7 @@ package fs
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -16,24 +17,30 @@ import (
 )
 
 var (
-	metricTotalOperationSeconds = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "syncthing",
-		Subsystem: "fs",
-		Name:      "operation_seconds_total",
-		Help:      "Total time spent in filesystem operations, per filesystem root and operation",
-	}, []string{"root", "operation"})
-	metricTotalOperationsCount = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "syncthing",
-		Subsystem: "fs",
-		Name:      "operations_total",
-		Help:      "Total number of filesystem operations, per filesystem root and operation",
-	}, []string{"root", "operation"})
-	metricTotalBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "syncthing",
-		Subsystem: "fs",
-		Name:      "operation_bytes_total",
-		Help:      "Total number of filesystem bytes transferred, per filesystem root and operation",
-	}, []string{"root", "operation"})
+	metricTotalOperationSeconds = sync.OnceValue(func() *prometheus.CounterVec {
+		return promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "syncthing",
+			Subsystem: "fs",
+			Name:      "operation_seconds_total",
+			Help:      "Total time spent in filesystem operations, per filesystem root and operation",
+		}, []string{"root", "operation"})
+	})
+	metricTotalOperationsCount = sync.OnceValue(func() *prometheus.CounterVec {
+		return promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "syncthing",
+			Subsystem: "fs",
+			Name:      "operations_total",
+			Help:      "Total number of filesystem operations, per filesystem root and operation",
+		}, []string{"root", "operation"})
+	})
+	metricTotalBytesCount = sync.OnceValue(func() *prometheus.CounterVec {
+		return promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "syncthing",
+			Subsystem: "fs",
+			Name:      "operation_bytes_total",
+			Help:      "Total number of filesystem bytes transferred, per filesystem root and operation",
+		}, []string{"root", "operation"})
+	})
 )
 
 const (
@@ -92,11 +99,11 @@ func (m *metricsFS) account(op string) func(bytes int) {
 	root := m.next.URI()
 	return func(bytes int) {
 		if dur := time.Since(t0).Seconds(); dur > 0 {
-			metricTotalOperationSeconds.WithLabelValues(root, op).Add(dur)
+			metricTotalOperationSeconds().WithLabelValues(root, op).Add(dur)
 		}
-		metricTotalOperationsCount.WithLabelValues(root, op).Inc()
+		metricTotalOperationsCount().WithLabelValues(root, op).Inc()
 		if bytes >= 0 {
-			metricTotalBytesCount.WithLabelValues(root, op).Add(float64(bytes))
+			metricTotalBytesCount().WithLabelValues(root, op).Add(float64(bytes))
 		}
 	}
 }

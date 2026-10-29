@@ -30,7 +30,7 @@ func (c *countingReader) Read(bs []byte) (int, error) {
 	c.tot.Add(int64(n))
 	totalIncoming.Add(int64(n))
 	c.last.Store(time.Now().UnixNano())
-	metricDeviceRecvBytes.WithLabelValues(c.idString).Add(float64(n))
+	metricDeviceRecvBytes().WithLabelValues(c.idString).Add(float64(n))
 	return n, err
 }
 
@@ -53,7 +53,7 @@ func (c *countingWriter) Write(bs []byte) (int, error) {
 	c.tot.Add(int64(n))
 	totalOutgoing.Add(int64(n))
 	c.last.Store(time.Now().UnixNano())
-	metricDeviceSentBytes.WithLabelValues(c.idString).Add(float64(n))
+	metricDeviceSentBytes().WithLabelValues(c.idString).Add(float64(n))
 	return n, err
 }
 

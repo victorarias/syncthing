@@ -118,7 +118,6 @@ func (s *stateTracker) setState(newState folderState) {
 	}
 
 	defer func() {
-		metricFolderState().WithLabelValues(s.folderID).Set(float64(s.current))
 	}()
 
 	eventData := map[string]any{
@@ -155,7 +154,6 @@ func (s *stateTracker) setError(err error) {
 	defer s.mut.Unlock()
 
 	defer func() {
-		metricFolderState().WithLabelValues(s.folderID).Set(float64(s.current))
 	}()
 
 	eventData := map[string]any{

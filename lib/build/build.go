@@ -17,19 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 )
-
-var buildInfo = sync.OnceValue(func() *prometheus.GaugeVec {
-	return promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "syncthing",
-		Subsystem: "build",
-		Name:      "info",
-		Help:      "A metric with a constant '1' value labeled by version information from when the binary was built.",
-	}, []string{"program", "version", "codename", "goversion", "builduser", "builddate", "tags"})
-})
 
 const Codename = "Hafnium Hornet"
 
@@ -117,17 +105,6 @@ func LongVersionFor(program string) string {
 	if len(tags) > 0 {
 		v = fmt.Sprintf("%s [%s]", v, strings.Join(tags, ", "))
 	}
-
-	buildInfo().Reset()
-	buildInfo().With(prometheus.Labels{
-		"program":   program,
-		"version":   Version,
-		"codename":  Codename,
-		"goversion": runtime.Version(),
-		"builduser": fmt.Sprintf("%s@%s", User, Host),
-		"builddate": Date.UTC().Format("2006-01-02 15:04:05 MST"),
-		"tags":      strings.Join(tags, ","),
-	}).Set(1)
 
 	return v
 }

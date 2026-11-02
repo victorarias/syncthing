@@ -108,7 +108,6 @@ func newWalker(cfg Config) *walker {
 		w.Matcher = ignore.New(w.Filesystem)
 	}
 
-	registerFolderMetrics(w.Folder)
 	return w
 }
 
@@ -296,8 +295,6 @@ func (w *walker) walkAndHashFiles(ctx context.Context, toHashChan chan<- protoco
 			return ctx.Err()
 		default:
 		}
-
-		metricScannedItems().WithLabelValues(w.Folder).Inc()
 
 		// Return value used when we are returning early and don't want to
 		// process the item. For directories, this means do-not-descend.

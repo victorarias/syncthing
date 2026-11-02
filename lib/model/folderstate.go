@@ -117,9 +117,6 @@ func (s *stateTracker) setState(newState folderState) {
 		return
 	}
 
-	defer func() {
-	}()
-
 	eventData := map[string]any{
 		"folder": s.folderID,
 		"to":     newState.String(),
@@ -152,9 +149,6 @@ func (s *stateTracker) getState() (current folderState, changed time.Time, err e
 func (s *stateTracker) setError(err error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-
-	defer func() {
-	}()
 
 	eventData := map[string]any{
 		"folder": s.folderID,

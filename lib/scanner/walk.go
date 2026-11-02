@@ -136,7 +136,7 @@ func (w *walker) walk(ctx context.Context) chan ScanResult {
 	// We're not required to emit scan progress events, just kick off hashers,
 	// and feed inputs directly from the walker.
 	if w.ProgressTickIntervalS < 0 {
-		newParallelHasher(ctx, w.Folder, w.Filesystem, w.Hashers, finishedChan, toHashChan, nil, nil)
+		newParallelHasher(ctx, w.Filesystem, w.Hashers, finishedChan, toHashChan, nil, nil)
 		return finishedChan
 	}
 
@@ -170,7 +170,7 @@ func (w *walker) walk(ctx context.Context) chan ScanResult {
 		done := make(chan struct{})
 		progress := newByteCounter()
 
-		newParallelHasher(ctx, w.Folder, w.Filesystem, w.Hashers, finishedChan, realToHashChan, progress, done)
+		newParallelHasher(ctx, w.Filesystem, w.Hashers, finishedChan, realToHashChan, progress, done)
 
 		// A routine which actually emits the FolderScanProgress events
 		// every w.ProgressTicker ticks, until the hasher routines terminate.

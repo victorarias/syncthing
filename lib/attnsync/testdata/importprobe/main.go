@@ -10,26 +10,12 @@ import (
 	"encoding/json"
 	"os"
 	"runtime"
-	"strings"
 
-	"github.com/prometheus/client_golang/prometheus"
 	_ "github.com/victorarias/syncthing/lib/attnsync"
 )
 
 func main() {
-	result := struct {
-		Goroutines int
-		Collectors []string
-	}{Goroutines: runtime.NumGoroutine()}
-	families, err := prometheus.DefaultGatherer.Gather()
-	if err != nil {
-		panic(err)
-	}
-	for _, family := range families {
-		if strings.HasPrefix(family.GetName(), "syncthing_") {
-			result.Collectors = append(result.Collectors, family.GetName())
-		}
-	}
+	result := struct{ Goroutines int }{Goroutines: runtime.NumGoroutine()}
 	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
 		panic(err)
 	}

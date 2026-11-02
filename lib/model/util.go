@@ -7,13 +7,10 @@
 package model
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
-	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/victorarias/syncthing/internal/slogutil"
 	"github.com/victorarias/syncthing/lib/fs"
 )
@@ -62,32 +59,4 @@ func inWritableDir(fn func(string) error, targetFs fs.Filesystem, path string, i
 		err = fmt.Errorf("error after failing to make parent directory writable: %w", err)
 	}
 	return err
-}
-
-// addTimeUntilCancelled adds time to the counter for the duration of the
-// Context. We do this piecemeal so that polling the counter during a long
-// operation shows a relevant value, instead of the counter just increasing
-// by a large amount at the end of the operation.
-func addTimeUntilCancelled(ctx context.Context, counter prometheus.Counter) {
-	t0 := time.Now()
-	defer func() {
-		if dur := time.Since(t0).Seconds(); dur > 0 {
-			counter.Add(dur)
-		}
-	}()
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case t := <-ticker.C:
-			if dur := t.Sub(t0).Seconds(); dur > 0 {
-				counter.Add(dur)
-			}
-			t0 = t
-		case <-ctx.Done():
-			return
-		}
-	}
 }

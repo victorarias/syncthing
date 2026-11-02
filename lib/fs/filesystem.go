@@ -261,8 +261,6 @@ func NewFilesystem(fsType FilesystemType, uri string, opts ...Option) Filesystem
 		fs = mtimeOpt.apply(fs)
 	}
 
-	fs = &metricsFS{next: fs}
-
 	layersAboveWalkFilesystem := 0
 	if caseOpt != nil {
 		// DirNames calls made to check the case of a name will also be

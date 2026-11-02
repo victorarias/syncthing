@@ -142,8 +142,6 @@ func newFolder(model *model, ignores *ignore.Matcher, cfg config.FolderConfigura
 	f.pullFailTimer = time.NewTimer(0)
 	<-f.pullFailTimer.C
 
-	registerFolderMetrics(f.ID)
-
 	return &f
 }
 
@@ -484,11 +482,6 @@ func (f *folder) scanSubdirs(ctx context.Context, subDirs []string) error {
 		return err
 	}
 	defer f.ioLimiter.Give(1)
-
-	metricFolderScans().WithLabelValues(f.ID).Inc()
-	scanCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go addTimeUntilCancelled(scanCtx, metricFolderScanSeconds().WithLabelValues(f.ID))
 
 	for i := range subDirs {
 		sub := osutil.NativeFilename(subDirs[i])

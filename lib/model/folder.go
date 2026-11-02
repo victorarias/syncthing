@@ -1113,9 +1113,11 @@ func (f *folder) monitorWatch(ctx context.Context) {
 		select {
 		case <-failTimer.C:
 			eventChan, errChan, err = f.mtimefs.Watch(".", f.ignores, ctx, f.IgnorePerms)
-			// We do this once per minute initially increased to
-			// max one hour in case of repeat failures.
-			f.scanOnWatchErr()
+			// Only a scan that starts after this attempt finds the changes
+			// made while no watch was running: before the first watch, during
+			// a restart, and while failed watches retry (once per minute
+			// initially, increased to max one hour).
+			f.ScheduleScan()
 			f.setWatchError(err, pause)
 			if err != nil {
 				failTimer.Reset(pause)
@@ -1195,16 +1197,6 @@ func (f *folder) setWatchError(err error, nextTryIn time.Duration) {
 		f.sl.Warn("Failed to start filesystem watcher", slog.String("wait", nextTryIn.String()), slogutil.Error(err))
 	} else {
 		f.sl.Debug("Failed to start filesystem watcher", slog.String("wait", nextTryIn.String()), slogutil.Error(err))
-	}
-}
-
-// scanOnWatchErr schedules a full scan immediately if an error occurred while watching.
-func (f *folder) scanOnWatchErr() {
-	f.watchMut.Lock()
-	err := f.watchErr
-	f.watchMut.Unlock()
-	if err != nil {
-		f.DelayScan(0)
 	}
 }
 

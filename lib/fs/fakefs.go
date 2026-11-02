@@ -63,6 +63,7 @@ const randomBlockShift = 14 // 128k
 //     content=true to save actual file contents instead of generating pseudorandomly; n.b. memory usage
 //     nostfolder=true skip the creation of .stfolder
 //     timeprecisionsecond=true Modification times are stored with only second precision
+//     watch=held  Watch waits until ReleaseFakeWatch, then runs without reporting events (default: watching is unsupported)
 //
 // - Two fakeFS:s pointing at the same root path see the same files.
 type fakeFS struct {
@@ -74,6 +75,7 @@ type fakeFS struct {
 	withContent         bool
 	timePrecisionSecond bool
 	latency             time.Duration
+	watchHeld           chan struct{}
 	userCache           *userCache
 	groupCache          *groupCache
 }
@@ -137,6 +139,9 @@ func newFakeFilesystem(rootURI string, _ ...Option) *fakeFS {
 	fs.withContent = params.Get("content") == "true"
 	nostfolder := params.Get("nostfolder") == "true"
 	fs.timePrecisionSecond = params.Get("timeprecisionsecond") == "true"
+	if params.Get("watch") == "held" {
+		fs.watchHeld = make(chan struct{})
+	}
 
 	if sizeavg == 0 {
 		sizeavg = 1 << 20
@@ -633,8 +638,25 @@ func (*fakeFS) Walk(_ string, _ WalkFunc) error {
 	return errors.New("not implemented")
 }
 
-func (*fakeFS) Watch(_ string, _ Matcher, _ context.Context, _ bool) (<-chan Event, <-chan error, error) {
-	return nil, nil, ErrWatchNotSupported
+func (fs *fakeFS) Watch(_ string, _ Matcher, ctx context.Context, _ bool) (<-chan Event, <-chan error, error) {
+	if fs.watchHeld == nil {
+		return nil, nil, ErrWatchNotSupported
+	}
+	select {
+	case <-fs.watchHeld:
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+	return make(chan Event), make(chan error), nil
+}
+
+// ReleaseFakeWatch lets the watches of the fake filesystem at rootURI, which
+// was created with watch=held, start.
+func ReleaseFakeWatch(rootURI string) {
+	fakeFSMut.Lock()
+	fs := fakeFSCache[rootURI]
+	fakeFSMut.Unlock()
+	close(fs.watchHeld)
 }
 
 func (*fakeFS) Hide(_ string) error {

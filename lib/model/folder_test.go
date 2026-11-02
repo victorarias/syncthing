@@ -10,11 +10,13 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/d4l3k/messagediff"
 
 	"github.com/victorarias/syncthing/lib/build"
 	"github.com/victorarias/syncthing/lib/config"
+	"github.com/victorarias/syncthing/lib/events"
 	"github.com/victorarias/syncthing/lib/fs"
 	"github.com/victorarias/syncthing/lib/protocol"
 	"github.com/victorarias/syncthing/lib/rand"
@@ -181,5 +183,34 @@ func TestSetPlatformData(t *testing.T) {
 
 	if err := sr.setPlatformData(fi, "file.tmp"); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestChangesMadeBeforeTheWatchStartsAreScannedOnceItDoes(t *testing.T) {
+	w, fcfg := newDefaultCfgWrapper(t)
+	fcfg.Path = rand.String(32) + "?content=true&watch=held"
+	fcfg.FSWatcherEnabled = true
+	fcfg.RescanIntervalS = 0
+	setFolder(t, w, fcfg)
+	m := setupModel(t, w)
+	defer cleanupModel(m)
+	m.mut.RLock()
+	r, _ := m.folderRunners.Get(fcfg.ID)
+	m.mut.RUnlock()
+	<-r.(*sendReceiveFolder).initialScanFinished
+
+	sub := m.evLogger.Subscribe(events.LocalIndexUpdated)
+	defer sub.Unsubscribe()
+	writeFile(t, fcfg.Filesystem(), "before-watch.md", []byte("written after the initial scan, before the watch"))
+	fs.ReleaseFakeWatch(fcfg.Path)
+	for {
+		if _, ok := m.testCurrentFolderFile(fcfg.ID, "before-watch.md"); ok {
+			return
+		}
+		select {
+		case <-sub.C():
+		case <-time.After(10 * time.Second):
+			t.Fatal("a file written before the watch started was not scanned within 10s of the watch starting")
+		}
 	}
 }

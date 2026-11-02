@@ -17,7 +17,7 @@ import (
 )
 
 // HashFile hashes the files and returns a list of blocks representing the file.
-func HashFile(ctx context.Context, folderID string, fs fs.Filesystem, path string, blockSize int, counter Counter) ([]protocol.BlockInfo, error) {
+func HashFile(ctx context.Context, fs fs.Filesystem, path string, blockSize int, counter Counter) ([]protocol.BlockInfo, error) {
 	fd, err := fs.Open(path)
 	if err != nil {
 		slogutil.Adapter(slogutil.Logger()).Debugln("open:", err)
@@ -63,23 +63,21 @@ func HashFile(ctx context.Context, folderID string, fs fs.Filesystem, path strin
 // workers are used in parallel. The outbox will become closed when the inbox
 // is closed and all items handled.
 type parallelHasher struct {
-	folderID string
-	fs       fs.Filesystem
-	outbox   chan<- ScanResult
-	inbox    <-chan protocol.FileInfo
-	counter  Counter
-	done     chan<- struct{}
-	wg       sync.WaitGroup
+	fs      fs.Filesystem
+	outbox  chan<- ScanResult
+	inbox   <-chan protocol.FileInfo
+	counter Counter
+	done    chan<- struct{}
+	wg      sync.WaitGroup
 }
 
-func newParallelHasher(ctx context.Context, folderID string, fs fs.Filesystem, workers int, outbox chan<- ScanResult, inbox <-chan protocol.FileInfo, counter Counter, done chan<- struct{}) {
+func newParallelHasher(ctx context.Context, fs fs.Filesystem, workers int, outbox chan<- ScanResult, inbox <-chan protocol.FileInfo, counter Counter, done chan<- struct{}) {
 	ph := &parallelHasher{
-		folderID: folderID,
-		fs:       fs,
-		outbox:   outbox,
-		inbox:    inbox,
-		counter:  counter,
-		done:     done,
+		fs:      fs,
+		outbox:  outbox,
+		inbox:   inbox,
+		counter: counter,
+		done:    done,
 	}
 
 	ph.wg.Add(workers)
@@ -106,7 +104,7 @@ func (ph *parallelHasher) hashFiles(ctx context.Context) {
 				panic("Bug. Asked to hash a directory or a deleted file.")
 			}
 
-			blocks, err := HashFile(ctx, ph.folderID, ph.fs, f.Name, f.BlockSize(), ph.counter)
+			blocks, err := HashFile(ctx, ph.fs, f.Name, f.BlockSize(), ph.counter)
 			if err != nil {
 				handleError(ctx, "hashing", f.Name, err, ph.outbox)
 				continue

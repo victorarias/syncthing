@@ -1176,12 +1176,12 @@ func (f *sendReceiveFolder) handleFile(ctx context.Context, file protocol.FileIn
 func (f *sendReceiveFolder) reuseBlocks(ctx context.Context, blocks []protocol.BlockInfo, reused []int, file protocol.FileInfo, tempName string) ([]protocol.BlockInfo, []int) {
 	// Check for an old temporary file which might have some blocks we could
 	// reuse.
-	tempBlocks, err := scanner.HashFile(ctx, f.ID, f.mtimefs, tempName, file.BlockSize(), nil)
+	tempBlocks, err := scanner.HashFile(ctx, f.mtimefs, tempName, file.BlockSize(), nil)
 	if err != nil {
 		var caseErr *fs.CaseConflictError
 		if errors.As(err, &caseErr) {
 			if rerr := f.mtimefs.Rename(caseErr.Real, tempName); rerr == nil {
-				tempBlocks, err = scanner.HashFile(ctx, f.ID, f.mtimefs, tempName, file.BlockSize(), nil)
+				tempBlocks, err = scanner.HashFile(ctx, f.mtimefs, tempName, file.BlockSize(), nil)
 			}
 		}
 	}
@@ -1361,7 +1361,7 @@ func (f *sendReceiveFolder) copierRoutine(ctx context.Context, in <-chan copyBlo
 				// block of all zeroes, so then we should not skip it.
 
 				// Pretend we copied it.
-				state.skippedSparseBlock(block.Size)
+				state.skippedSparseBlock()
 				state.copyDone(block)
 				continue
 			}
@@ -1402,7 +1402,7 @@ func (f *sendReceiveFolder) copyBlock(ctx context.Context, block protocol.BlockI
 	// Check for the block in the current version of the file
 	if idx, ok := state.curFileBlocks[string(block.Hash)]; ok {
 		if f.copyBlockFromFile(ctx, state.curFile.Name, state.curFile.Blocks[idx].Offset, state, f.mtimefs, block, buf) {
-			state.copiedFromOrigin(block.Size)
+			state.copiedFromOrigin()
 			return true
 		}
 		if state.failed() != nil {
@@ -1453,9 +1453,7 @@ func (f *sendReceiveFolder) copyBlockFromFolder(ctx context.Context, folderID st
 		}
 
 		if e.FileName == state.file.Name {
-			state.copiedFromOrigin(block.Size)
-		} else {
-			state.copiedFromElsewhere(block.Size)
+			state.copiedFromOrigin()
 		}
 		return true
 	}

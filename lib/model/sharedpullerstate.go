@@ -274,17 +274,14 @@ func (s *sharedPullerState) copyDone(block protocol.BlockInfo) {
 	s.mut.Unlock()
 }
 
-func (s *sharedPullerState) copiedFromOrigin(bytes int) {
+func (s *sharedPullerState) copiedFromOrigin() {
 	s.mut.Lock()
 	s.copyOrigin++
 	s.updated = time.Now()
 	s.mut.Unlock()
 }
 
-func (s *sharedPullerState) copiedFromElsewhere(bytes int) {
-}
-
-func (s *sharedPullerState) skippedSparseBlock(bytes int) {
+func (s *sharedPullerState) skippedSparseBlock() {
 	// pretend we copied it, historical
 	s.mut.Lock()
 	s.copyOrigin++

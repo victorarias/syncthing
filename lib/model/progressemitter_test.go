@@ -89,7 +89,7 @@ func TestProgressEmitter(t *testing.T) {
 	expectEvent(w, t, 1)
 	expectTimeout(w, t)
 
-	s.copiedFromOrigin(1)
+	s.copiedFromOrigin()
 
 	expectEvent(w, t, 1)
 	expectTimeout(w, t)

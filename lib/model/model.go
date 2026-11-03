@@ -492,7 +492,7 @@ func (m *model) removeFolder(cfg config.FolderConfiguration) {
 
 	m.cleanupFolderLocked(cfg)
 	m.indexHandlers.Each(func(_ protocol.DeviceID, r *indexHandlerRegistry) error {
-		r.Remove(cfg.ID)
+		r.FolderRemoved(cfg.ID)
 		return nil
 	})
 
@@ -1173,12 +1173,16 @@ func (m *model) handleIndex(conn protocol.Connection, folder string, fs []protoc
 	deviceID := conn.DeviceID()
 	slogutil.Adapter(m.sl).Debugf("%v (in): %s / %q: %d files", op, deviceID, folder, len(fs))
 
+	// The sender learns that we stopped sharing or paused a folder from our
+	// next ClusterConfig, and may send for it until then. Drop the index:
+	// that ClusterConfig restarts the sender's index handler from our stored
+	// sequence, so nothing is lost if the folder comes back.
 	if cfg, ok := m.cfg.Folder(folder); !ok || !cfg.SharedWith(deviceID) {
-		slogutil.Logger(m.sl).Warn(`Operation for unexpected folder ID; ensure that the folder exists and that this device is selected under "Share With" in the folder configuration.`, slog.String("operation", op), cfg.LogAttr(), deviceID.LogAttr())
-		return fmt.Errorf("%s: %w", folder, ErrFolderMissing)
+		slogutil.Adapter(m.sl).Debugf("%v (in): %s / %q: dropped, folder not shared with the device", op, deviceID, folder)
+		return nil
 	} else if cfg.Paused {
-		slogutil.Adapter(m.sl).Debugf("%v for paused folder (ID %q) sent from device %q.", op, folder, deviceID)
-		return fmt.Errorf("%s: %w", folder, ErrFolderPaused)
+		slogutil.Adapter(m.sl).Debugf("%v (in): %s / %q: dropped, folder paused", op, deviceID, folder)
+		return nil
 	}
 
 	m.mut.RLock()

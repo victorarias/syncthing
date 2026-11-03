@@ -52,6 +52,9 @@ type indexHandler struct {
 	paused bool
 	sdb    db.DB
 	runner service
+
+	// The peer's ClusterConfig entry this handler started from.
+	startInfo *clusterConfigDeviceInfo
 }
 
 func newIndexHandler(conn protocol.Connection, downloads *deviceDownloadState, folder config.FolderConfiguration, sdb db.DB, runner service, startInfo *clusterConfigDeviceInfo, evLogger events.Logger, loggers ...*slog.Logger) (*indexHandler, error) {
@@ -140,9 +143,10 @@ func newIndexHandler(conn protocol.Connection, downloads *deviceDownloadState, f
 		sentPrevSequence:         startSequence,
 		evLogger:                 evLogger,
 
-		sdb:    sdb,
-		runner: runner,
-		cond:   sync.NewCond(new(sync.Mutex)),
+		sdb:       sdb,
+		runner:    runner,
+		cond:      sync.NewCond(new(sync.Mutex)),
+		startInfo: startInfo,
 	}, nil
 }
 
@@ -585,6 +589,24 @@ func (r *indexHandlerRegistry) Remove(folder string) {
 	slogutil.Adapter(r.sl).Debugf("Removed index handler for device %v and folder %v", r.conn.DeviceID().Short(), folder)
 }
 
+// FolderRemoved stops the index handler of a folder we no longer run for
+// this device, because we removed it or stopped sharing it with the device.
+// The device's ClusterConfig entry for the folder stays pending, as if the
+// device had announced the folder while we did not have it: the device keeps
+// announcing it without sending a new ClusterConfig, and once we share it
+// again, its index starts arriving and needs a handler.
+func (r *indexHandlerRegistry) FolderRemoved(folder string) {
+	r.mut.Lock()
+	defer r.mut.Unlock()
+
+	delete(r.folderStates, folder)
+	if is, ok := r.indexHandlers.Get(folder); ok {
+		r.startInfos[folder] = is.startInfo
+		r.indexHandlers.RemoveAndWait(folder, 0)
+		slogutil.Adapter(r.sl).Debugf("Removed index handler for device %v and folder %v, keeping its start info", r.conn.DeviceID().Short(), folder)
+	}
+}
+
 // RemoveAllExcept stops all running index handlers and removes those pending to be started,
 // except mentioned ones.
 // It is a noop if the folder isn't known.
@@ -609,10 +631,10 @@ func (r *indexHandlerRegistry) RemoveAllExcept(except map[string]remoteFolderSta
 
 // RegisterFolderState must be called whenever something about the folder
 // changes. The exception being if the folder is removed entirely, then call
-// Remove. The fset and runner arguments may be nil, if given folder is paused.
+// FolderRemoved. The fset and runner arguments may be nil, if given folder is paused.
 func (r *indexHandlerRegistry) RegisterFolderState(folder config.FolderConfiguration, runner service) {
 	if !folder.SharedWith(r.conn.DeviceID()) {
-		r.Remove(folder.ID)
+		r.FolderRemoved(folder.ID)
 		return
 	}
 

@@ -4138,3 +4138,73 @@ func countIterator[T any](t *testing.T) func(it iter.Seq[T], errFn func() error)
 		return count
 	}
 }
+
+// An Index for a folder the receiver does not share with the sender, or has
+// paused, is dropped: the receiver's next ClusterConfig tells the sender. An
+// Index for a folder that is configured and running but has no index handler
+// means the handshake went wrong, and ends the connection.
+func TestIndexForAFolderWithoutAnIndexHandler(t *testing.T) {
+	w, fcfg := newDefaultCfgWrapper(t)
+	paused := fcfg.Copy()
+	paused.ID = "paused"
+	paused.Paused = true
+	setFolder(t, w, paused)
+	unshared := fcfg.Copy()
+	unshared.ID = "unshared"
+	unshared.Devices = []config.FolderDeviceConfiguration{{DeviceID: myID}}
+	setFolder(t, w, unshared)
+	m := setupModel(t, w)
+	defer cleanupModel(m)
+
+	conn := newFakeConnection(device1, m)
+	m.AddConnection(conn, protocol.Hello{})
+	must(t, m.ClusterConfig(conn, &protocol.ClusterConfig{}))
+
+	for _, folder := range []string{"unknown", "unshared", "paused"} {
+		if err := m.Index(conn, &protocol.Index{Folder: folder}); err != nil {
+			t.Errorf("Index for %s folder: %v, want dropped", folder, err)
+		}
+		if err := m.IndexUpdate(conn, &protocol.IndexUpdate{Folder: folder}); err != nil {
+			t.Errorf("IndexUpdate for %s folder: %v, want dropped", folder, err)
+		}
+	}
+	if err := m.Index(conn, &protocol.Index{Folder: fcfg.ID}); !errors.Is(err, ErrFolderMissing) {
+		t.Errorf("Index for a running folder without an index handler: %v, want %v", err, ErrFolderMissing)
+	}
+}
+
+// The peer keeps announcing a folder we stopped sharing with it, and does not
+// send a new ClusterConfig when we share it again. Its index must still find a
+// handler once we do.
+func TestIndexAfterTheFolderIsSharedAgain(t *testing.T) {
+	stops := map[string]func(cfg *config.Configuration, folder string){
+		"removed": func(cfg *config.Configuration, folder string) {
+			cfg.Folders = slices.DeleteFunc(cfg.Folders, func(f config.FolderConfiguration) bool { return f.ID == folder })
+		},
+		"unshared": func(cfg *config.Configuration, folder string) {
+			_, i, _ := cfg.Folder(folder)
+			cfg.Folders[i].Devices = slices.DeleteFunc(cfg.Folders[i].Devices, func(d config.FolderDeviceConfiguration) bool { return d.DeviceID == device1 })
+		},
+	}
+	for name, stop := range stops {
+		t.Run(name, func(t *testing.T) {
+			w, fcfg := newDefaultCfgWrapper(t)
+			m := setupModel(t, w)
+			defer cleanupModel(m)
+			conn := addFakeConn(m, device1, fcfg.ID)
+			shared := w.RawCopy()
+
+			stopped := shared.Copy()
+			stop(&stopped, fcfg.ID)
+			replace(t, w, stopped)
+			if err := m.Index(conn, &protocol.Index{Folder: fcfg.ID}); err != nil {
+				t.Fatalf("Index while not shared: %v, want dropped", err)
+			}
+
+			replace(t, w, shared)
+			if err := m.Index(conn, &protocol.Index{Folder: fcfg.ID}); err != nil {
+				t.Fatalf("Index once shared again: %v", err)
+			}
+		})
+	}
+}

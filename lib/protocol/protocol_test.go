@@ -158,7 +158,7 @@ func TestCloseRace(t *testing.T) {
 	c1.Start()
 	defer closeAndWait(c1, ar, bw)
 	c0.ClusterConfig(&ClusterConfig{}, nil)
-	c1.ClusterConfig(&ClusterConfig{}, nil)
+	c1.ClusterConfig(&ClusterConfig{Folders: []Folder{{ID: "default"}}}, nil)
 
 	c1.Index(context.Background(), &Index{Folder: "default"})
 	select {

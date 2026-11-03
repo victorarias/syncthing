@@ -162,6 +162,11 @@ type model struct {
 	promotionTimer  *time.Timer
 	observed        *db.ObservedDB
 
+	// ccMut serializes generating and handing over ClusterConfigs, so the
+	// last ClusterConfig a connection is given is the newest. Take it
+	// before mut, never while holding mut.
+	ccMut sync.Mutex
+
 	// fields protected by mut
 	mut                            sync.RWMutex
 	folderCfgs                     map[string]config.FolderConfiguration                  // folder -> cfg
@@ -1646,11 +1651,18 @@ func (m *model) sendClusterConfig(ids []protocol.DeviceID) {
 		}
 	}
 	m.mut.RUnlock()
-	// Generating cluster-configs acquires the mutex.
 	for _, conn := range ccConns {
-		cm, passwords := m.generateClusterConfig(conn.DeviceID())
-		go conn.ClusterConfig(cm, passwords)
+		m.sendClusterConfigTo(conn)
 	}
+}
+
+// sendClusterConfigTo generates a ClusterConfig for conn's device and hands
+// it to conn, which never blocks. Generation acquires mut.
+func (m *model) sendClusterConfigTo(conn protocol.Connection) {
+	m.ccMut.Lock()
+	defer m.ccMut.Unlock()
+	cm, passwords := m.generateClusterConfig(conn.DeviceID())
+	conn.ClusterConfig(cm, passwords)
 }
 
 // handleIntroductions handles adding devices/folders that are shared by an introducer device
@@ -2330,7 +2342,6 @@ func (m *model) promoteConnections() {
 	m.mut.Lock()
 
 	for deviceID, connIDs := range m.deviceConnIDs {
-		cm, passwords := m.generateClusterConfigRLocked(deviceID)
 		if m.promotedConnID[deviceID] != connIDs[0] {
 			// The previously promoted connection is not the current
 			// primary; we should promote the primary connection to be the
@@ -2344,7 +2355,7 @@ func (m *model) promoteConnections() {
 				if conn.Statistics().StartedAt.IsZero() {
 					conn.Start()
 				}
-				conn.ClusterConfig(cm, passwords)
+				m.sendClusterConfigTo(conn)
 			})
 			m.promotedConnID[deviceID] = connIDs[0]
 		}
@@ -2356,7 +2367,10 @@ func (m *model) promoteConnections() {
 			if conn.Statistics().StartedAt.IsZero() {
 				postLockActions = append(postLockActions, func() {
 					conn.Start()
+					m.ccMut.Lock()
+					_, passwords := m.generateClusterConfig(deviceID)
 					conn.ClusterConfig(&protocol.ClusterConfig{Secondary: true}, passwords)
+					m.ccMut.Unlock()
 				})
 			}
 		}
@@ -2559,7 +2573,7 @@ func (m *model) generateClusterConfigRLocked(device protocol.DeviceID) (*protoco
 		// pretend we are. Otherwise the remote might get confused about
 		// the missing index info (and drop all the info). We will send
 		// another cluster config once the folder is started.
-		if folderCfg.Paused {
+		if _, running := m.folderRunners.Get(folderCfg.ID); folderCfg.Paused || !running {
 			protocolFolder.StopReason = protocol.FolderStopReasonPaused
 		}
 

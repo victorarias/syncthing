@@ -38,8 +38,9 @@ func TestIndexhandlerConcurrency(t *testing.T) {
 	c2.Start()
 	defer c2.Close(io.EOF)
 
-	c1.ClusterConfig(&protocol.ClusterConfig{}, nil)
-	c2.ClusterConfig(&protocol.ClusterConfig{}, nil)
+	foo := &protocol.ClusterConfig{Folders: []protocol.Folder{{ID: "foo"}}}
+	c1.ClusterConfig(foo, nil)
+	c2.ClusterConfig(foo, nil)
 	c1.Index(ctx, &protocol.Index{Folder: "foo"})
 	c2.Index(ctx, &protocol.Index{Folder: "foo"})
 

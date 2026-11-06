@@ -183,10 +183,21 @@ type rawConnection struct {
 
 	idxMut sync.Mutex // ensures serialization of Index calls
 
+	// ccMut protects the ClusterConfig slot and the folders announced by
+	// the last written ClusterConfig. A newer ClusterConfig replaces an
+	// unwritten older one, and the writer writes the slot before any
+	// outbox message, so ClusterConfigs reach the wire in the order they
+	// were given. Index and IndexUpdate wait for their folder to be
+	// announced as running.
+	ccMut       sync.Mutex
+	pendingCC   *ClusterConfig
+	ccPending   chan struct{} // capacity one; signals that pendingCC is set
+	announced   map[string]struct{}
+	announcedCh chan struct{} // closed and replaced whenever announced changes
+
 	inbox                 chan proto.Message
 	outbox                chan asyncMessage
 	closeBox              chan asyncMessage
-	clusterConfigBox      chan *ClusterConfig
 	dispatcherLoopStopped chan struct{}
 	closed                chan struct{}
 	closeOnce             sync.Once
@@ -260,7 +271,9 @@ func newRawConnection(deviceID DeviceID, reader io.Reader, writer io.Writer, clo
 		inbox:                 make(chan proto.Message),
 		outbox:                make(chan asyncMessage),
 		closeBox:              make(chan asyncMessage),
-		clusterConfigBox:      make(chan *ClusterConfig),
+		ccPending:             make(chan struct{}, 1),
+		announced:             make(map[string]struct{}),
+		announcedCh:           make(chan struct{}),
 		dispatcherLoopStopped: make(chan struct{}),
 		closed:                make(chan struct{}),
 		compression:           compress,
@@ -318,12 +331,8 @@ func (c *rawConnection) DeviceID() DeviceID {
 
 // Index writes the list of file information to the connected peer device
 func (c *rawConnection) Index(ctx context.Context, idx *Index) error {
-	select {
-	case <-c.closed:
-		return ErrClosed
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
+	if err := c.awaitAnnounced(ctx, idx.Folder); err != nil {
+		return err
 	}
 	c.idxMut.Lock()
 	c.send(ctx, idx.toWire(), nil)
@@ -333,12 +342,8 @@ func (c *rawConnection) Index(ctx context.Context, idx *Index) error {
 
 // IndexUpdate writes the list of file information to the connected peer device as an update
 func (c *rawConnection) IndexUpdate(ctx context.Context, idxUp *IndexUpdate) error {
-	select {
-	case <-c.closed:
-		return ErrClosed
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
+	if err := c.awaitAnnounced(ctx, idxUp.Folder); err != nil {
+		return err
 	}
 	c.idxMut.Lock()
 	c.send(ctx, idxUp.toWire(), nil)
@@ -385,12 +390,92 @@ func (c *rawConnection) Request(ctx context.Context, req *Request) ([]byte, erro
 	}
 }
 
-// ClusterConfig sends the cluster configuration message to the peer.
-func (c *rawConnection) ClusterConfig(config *ClusterConfig, _ map[string]string) {
-	select {
-	case c.clusterConfigBox <- config:
-	case <-c.closed:
+// awaitAnnounced blocks until the last ClusterConfig written on this
+// connection announced folder as running, so the peer never receives an
+// index for a folder it was not told about.
+func (c *rawConnection) awaitAnnounced(ctx context.Context, folder string) error {
+	for {
+		c.ccMut.Lock()
+		_, ok := c.announced[folder]
+		changed := c.announcedCh
+		c.ccMut.Unlock()
+		if ok {
+			return nil
+		}
+		select {
+		case <-changed:
+		case <-c.closed:
+			return ErrClosed
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
+}
+
+// ClusterConfig sends the cluster configuration message to the peer. It
+// never blocks: the message replaces any older one not yet written.
+// Callers must not call it concurrently for one connection, so that the
+// last one given is the newest.
+func (c *rawConnection) ClusterConfig(config *ClusterConfig, _ map[string]string) {
+	c.ccMut.Lock()
+	c.pendingCC = config
+	c.ccMut.Unlock()
+	select {
+	case c.ccPending <- struct{}{}:
+	default:
+	}
+}
+
+// writePendingClusterConfig writes the ClusterConfig in the slot, if any,
+// and records the folders it announces as running.
+func (c *rawConnection) writePendingClusterConfig() error {
+	c.ccMut.Lock()
+	cc := c.pendingCC
+	c.pendingCC = nil
+	c.ccMut.Unlock()
+	if cc == nil {
+		return nil
+	}
+	if err := c.writeMessage(cc.toWire()); err != nil {
+		return err
+	}
+	announced := make(map[string]struct{}, len(cc.Folders))
+	for _, f := range cc.Folders {
+		if f.StopReason == FolderStopReasonRunning {
+			announced[f.ID] = struct{}{}
+		}
+	}
+	c.ccMut.Lock()
+	c.announced = announced
+	close(c.announcedCh)
+	c.announcedCh = make(chan struct{})
+	c.ccMut.Unlock()
+	return nil
+}
+
+// writeAnnounced writes an outbox message, dropping an index for a folder
+// the last written ClusterConfig does not announce. That happens only when
+// a newer ClusterConfig stopped announcing the folder after the index
+// passed awaitAnnounced; the peer would reject it, and its next
+// ClusterConfig for the folder restarts the index from its own sequence.
+func (c *rawConnection) writeAnnounced(msg proto.Message) error {
+	var folder string
+	switch msg := msg.(type) {
+	case *bep.Index:
+		folder = msg.Folder
+	case *bep.IndexUpdate:
+		folder = msg.Folder
+	default:
+		return c.writeMessage(msg)
+	}
+	c.ccMut.Lock()
+	_, ok := c.announced[folder]
+	c.ccMut.Unlock()
+	if !ok {
+		slogutil.Adapter(c.sl).Debugf("Dropping index for folder %q no longer announced to %s", folder, c.deviceID.Short())
+		return nil
+	}
+	return c.writeMessage(msg)
 }
 
 func (c *rawConnection) Closed() <-chan struct{} {
@@ -725,9 +810,8 @@ func (c *rawConnection) send(ctx context.Context, msg proto.Message, done chan s
 
 func (c *rawConnection) writerLoop() {
 	select {
-	case cc := <-c.clusterConfigBox:
-		err := c.writeMessage(cc.toWire())
-		if err != nil {
+	case <-c.ccPending:
+		if err := c.writePendingClusterConfig(); err != nil {
 			c.internalClose(err)
 			return
 		}
@@ -750,15 +834,25 @@ func (c *rawConnection) writerLoop() {
 			return
 		default:
 		}
+		// A pending ClusterConfig goes before any outbox message, so an
+		// index never overtakes the ClusterConfig that announces its folder.
 		select {
-		case cc := <-c.clusterConfigBox:
-			err := c.writeMessage(cc.toWire())
-			if err != nil {
+		case <-c.ccPending:
+			if err := c.writePendingClusterConfig(); err != nil {
+				c.internalClose(err)
+				return
+			}
+			continue
+		default:
+		}
+		select {
+		case <-c.ccPending:
+			if err := c.writePendingClusterConfig(); err != nil {
 				c.internalClose(err)
 				return
 			}
 		case hm := <-c.outbox:
-			err := c.writeMessage(hm.msg)
+			err := c.writeAnnounced(hm.msg)
 			if hm.done != nil {
 				close(hm.done)
 			}

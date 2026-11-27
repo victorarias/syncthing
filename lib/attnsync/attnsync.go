@@ -82,7 +82,6 @@ func New(indexPath string, cfg config.Configuration, id protocol.DeviceID, logge
 	keys := protocol.NewKeyGenerator()
 	m := model.NewModel(wrapper, id, database, nil, ev, keys, logger)
 	sup := suture.New("attnsync", svcutil.SpecWithInfoLogger(logger))
-	sup.Add(ev)
 	sup.Add(wrapper)
 	sup.Add(m)
 	sup.Add(database.Service(8 * time.Hour))
@@ -111,6 +110,16 @@ func prepare(cfg *config.Configuration, id protocol.DeviceID, logger *slog.Logge
 
 func (e *Engine) Serve(ctx context.Context) error {
 	defer e.database.Close()
+	logging, stopLogging := context.WithCancel(context.WithoutCancel(ctx))
+	logged := make(chan struct{})
+	go func() {
+		defer close(logged)
+		e.events.Serve(logging)
+	}()
+	defer func() {
+		stopLogging()
+		<-logged
+	}()
 	return e.supervisor.Serve(ctx)
 }
 
